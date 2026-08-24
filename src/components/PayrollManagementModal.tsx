@@ -19,7 +19,7 @@ import { useMasterStore } from '../store/useMasterStore';
 import { useSettingsStore } from '../store/useSettingsStore';
 import { db } from '../db/client';
 import { transactions, payrollPayouts, employees } from '../db/schema';
-import { eq, and, gte, lte, sql, desc } from 'drizzle-orm';
+import { eq, and, gte, lte, sql, desc, or } from 'drizzle-orm';
 import { buildSlipGajiBytes, stringToBytes } from '../utils/bluetoothPrinter';
 
 interface PayrollManagementModalProps {
@@ -69,8 +69,15 @@ export function PayrollManagementModal({ visible, onClose }: PayrollManagementMo
 
   // Auto-set start & end date based on selected period
   const updatePeriodDates = useCallback((type: 'harian' | 'mingguan' | 'bulanan') => {
+    const getLocalDateStr = (d: Date) => {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    };
+
     const today = new Date();
-    const endDate = today.toISOString().split('T')[0];
+    const endDate = getLocalDateStr(today);
 
     let startDate = endDate;
     if (type === 'harian') {
@@ -79,11 +86,11 @@ export function PayrollManagementModal({ visible, onClose }: PayrollManagementMo
       // 7 hari terakhir
       const start = new Date();
       start.setDate(today.getDate() - 6);
-      startDate = start.toISOString().split('T')[0];
+      startDate = getLocalDateStr(start);
     } else if (type === 'bulanan') {
       // Awal bulan ini
       const start = new Date(today.getFullYear(), today.getMonth(), 1);
-      startDate = start.toISOString().split('T')[0];
+      startDate = getLocalDateStr(start);
     }
 
     setStartDateStr(startDate);
@@ -112,13 +119,15 @@ export function PayrollManagementModal({ visible, onClose }: PayrollManagementMo
       if (!selectedEmp) return;
 
       // 1. Query total motor dicuci oleh karyawan ini di rentang tanggal
-      // PERBAIKAN: Gunakan employeeId (integer) bukan employeeName (string)
-      // untuk mencegah bug jika ada 2 karyawan bernama sama.
+      // Mencakup pencarian berdasarkan ID maupun Nama Karyawan untuk kompatibilitas data lama & baru
       const txs = await db.select()
         .from(transactions)
         .where(
           and(
-            eq(transactions.employeeId, selectedEmployeeId),
+            or(
+              eq(transactions.employeeId, selectedEmployeeId),
+              eq(transactions.employeeName, selectedEmp.name)
+            ),
             eq(transactions.status, 'completed'),
             sql`date(${transactions.createdAt}, 'localtime') >= date(${startDateStr})`,
             sql`date(${transactions.createdAt}, 'localtime') <= date(${endDateStr})`
