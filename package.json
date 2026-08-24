@@ -39,7 +39,7 @@
   "devDependencies": {
     "@types/react": "~19.1.10",
     "drizzle-kit": "^0.31.10",
-    "typescript": "~5.7.3"
+    "typescript": "~5.9.2"
   },
   "scripts": {
     "start": "expo start --android",
