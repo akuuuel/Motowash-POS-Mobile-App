@@ -118,68 +118,91 @@ export function PayrollManagementModal({ visible, onClose }: PayrollManagementMo
       const selectedEmp = employeesList.find((e) => e.id === selectedEmployeeId);
       if (!selectedEmp) return;
 
-      // 1. Query total motor dicuci oleh karyawan ini di rentang tanggal
-      // Mencakup pencarian berdasarkan ID maupun Nama Karyawan untuk kompatibilitas data lama & baru
-      const txs = await db.select()
-        .from(transactions)
-        .where(
-          and(
-            or(
-              eq(transactions.employeeId, selectedEmployeeId),
-              eq(transactions.employeeName, selectedEmp.name)
-            ),
-            eq(transactions.status, 'completed'),
-            sql`date(${transactions.createdAt}, 'localtime') >= date(${startDateStr})`,
-            sql`date(${transactions.createdAt}, 'localtime') <= date(${endDateStr})`
-          )
-        );
-
-      setWashCount(txs.length);
-
-      // 2. Hitung breakdown per kategori motor
-      // PERBAIKAN: fallback komisi ke 0, bukan 5000
-      // (nilai 5000 hardcoded bisa salah jika komisi memang sengaja 0)
-      const breakdownMap: Record<string, { count: number; commission: number }> = {};
-      txs.forEach((tx) => {
-        const catName = tx.vehicleCategoryName || 'Motor';
-        const comm = tx.commissionAmount ?? 0;
-        if (!breakdownMap[catName]) {
-          breakdownMap[catName] = { count: 0, commission: comm };
-        }
-        breakdownMap[catName].count += 1;
-      });
-
-      const breakdownList: CategoryBreakdownItem[] = Object.keys(breakdownMap).map((catName) => {
-        const item = breakdownMap[catName];
-        return {
-          categoryName: catName,
-          count: item.count,
-          commissionPerWash: item.commission,
-          subtotal: item.count * item.commission,
-        };
-      });
-
-      setCategoryBreakdown(breakdownList);
-
-      const calculatedTotalCommission = breakdownList.reduce((acc, item) => acc + item.subtotal, 0);
-      setTotalCommission(calculatedTotalCommission);
-
-      // 3. Cek apakah penggajian periode ini sudah terbayarkan sebelumnya di database
-      const payouts = await db.select()
+      // 1. Cari pembayaran (payout) TERAKHIR yang sudah LUNAS (status = 'paid') untuk karyawan ini
+      const lastPaidPayouts = await db.select()
         .from(payrollPayouts)
         .where(
           and(
-            eq(payrollPayouts.employeeId, selectedEmployeeId),
-            eq(payrollPayouts.startDate, startDateStr),
-            eq(payrollPayouts.endDate, endDateStr)
+            or(
+              eq(payrollPayouts.employeeId, selectedEmployeeId),
+              eq(payrollPayouts.employeeName, selectedEmp.name)
+            ),
+            eq(payrollPayouts.status, 'paid')
           )
         )
+        .orderBy(desc(payrollPayouts.id))
         .limit(1);
 
-      if (payouts.length > 0) {
-        setExistingPayout(payouts[0]);
-      } else {
+      const lastPaid = lastPaidPayouts.length > 0 ? lastPaidPayouts[0] : null;
+
+      // 2. Query transaksi pencucian motor karyawan ini
+      // Hanya ambil transaksi yang BELUM PERNAH dibayarkan (dibuat SETELAH paidAt/createdAt pembayaran terakhir)
+      let txsConditions = [
+        or(
+          eq(transactions.employeeId, selectedEmployeeId),
+          eq(transactions.employeeName, selectedEmp.name)
+        ),
+        eq(transactions.status, 'completed'),
+        sql`date(${transactions.createdAt}, 'localtime') >= date(${startDateStr})`,
+        sql`date(${transactions.createdAt}, 'localtime') <= date(${endDateStr})`
+      ];
+
+      if (lastPaid && (lastPaid.paidAt || lastPaid.createdAt)) {
+        const refTime = lastPaid.paidAt || lastPaid.createdAt;
+        txsConditions.push(sql`${transactions.createdAt} > ${refTime}`);
+      }
+
+      const txs = await db.select()
+        .from(transactions)
+        .where(and(...txsConditions));
+
+      // 3. Jika ada transaksi BARU setelah pembayaran terakhir (atau belum pernah dibayar):
+      if (txs.length > 0) {
         setExistingPayout(null);
+        setWashCount(txs.length);
+
+        const breakdownMap: Record<string, { count: number; commission: number }> = {};
+        txs.forEach((tx) => {
+          const catName = tx.vehicleCategoryName || 'Motor';
+          const comm = tx.commissionAmount ?? 0;
+          if (!breakdownMap[catName]) {
+            breakdownMap[catName] = { count: 0, commission: comm };
+          }
+          breakdownMap[catName].count += 1;
+        });
+
+        const breakdownList: CategoryBreakdownItem[] = Object.keys(breakdownMap).map((catName) => {
+          const item = breakdownMap[catName];
+          return {
+            categoryName: catName,
+            count: item.count,
+            commissionPerWash: item.commission,
+            subtotal: item.count * item.commission,
+          };
+        });
+
+        setCategoryBreakdown(breakdownList);
+        const calculatedTotalCommission = breakdownList.reduce((acc, item) => acc + item.subtotal, 0);
+        setTotalCommission(calculatedTotalCommission);
+      } else if (lastPaid) {
+        // Jika TIDAK ADA transaksi baru setelah pembayaran terakhir:
+        // Tampilkan rekap slip pembayaran terakhir
+        setExistingPayout(lastPaid);
+        setWashCount(lastPaid.totalWashCount);
+        setTotalCommission(lastPaid.totalCommission);
+
+        try {
+          const parsed = lastPaid.breakdownJson ? JSON.parse(lastPaid.breakdownJson) : [];
+          setCategoryBreakdown(parsed);
+        } catch {
+          setCategoryBreakdown([]);
+        }
+      } else {
+        // Belum ada transaksi & belum ada pembayaran
+        setExistingPayout(null);
+        setWashCount(0);
+        setCategoryBreakdown([]);
+        setTotalCommission(0);
       }
     } catch (e) {
       console.error('Gagal menghitung penggajian:', e);
@@ -253,6 +276,8 @@ export function PayrollManagementModal({ visible, onClose }: PayrollManagementMo
         breakdownJson: JSON.stringify(categoryBreakdown),
         status: 'paid',
         notes: notesInput.trim() || null,
+        paidAt: sql`datetime('now', 'localtime')`,
+        createdAt: sql`datetime('now', 'localtime')`,
       });
 
       Alert.alert('Sukses', `Gaji ${selectedEmployee.name} berhasil ditandai TERBAYARKAN.`);

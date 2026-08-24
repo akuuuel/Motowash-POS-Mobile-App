@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { db } from '../db/client';
 import { transactions, vehicleCategories, employees } from '../db/schema';
-import { desc, like, eq } from 'drizzle-orm';
+import { desc, like, eq, sql } from 'drizzle-orm';
 
 interface TransactionForm {
   plateNumber: string;
@@ -133,6 +133,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       paymentMethod: form.paymentMethod,
       notes: form.notes,
       status: 'completed',
+      createdAt: sql`datetime('now', 'localtime')`,
     }).returning();
 
     // 4. Reset Form & Return Transaksi yang Berhasil
