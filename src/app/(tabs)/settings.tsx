@@ -45,120 +45,128 @@ export default function SettingsScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
-      <ThemedText style={styles.sectionHeader}>Pengelolaan Usaha</ThemedText>
-      
-      {/* 1. Kelola Karyawan */}
-      <TouchableOpacity style={styles.menuItem} onPress={() => setActiveModal('karyawan')}>
-        <View style={styles.menuLeft}>
-          <View style={[styles.iconWrapper, { backgroundColor: '#EFF6FF' }]}>
-            <Ionicons name="people-outline" size={20} color="#2563EB" />
+    <View style={{ flex: 1 }}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[styles.content, { paddingBottom: 60 }]}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={true}
+      >
+        <ThemedText style={styles.sectionHeader}>Pengelolaan Usaha</ThemedText>
+        
+        {/* 1. Kelola Karyawan */}
+        <TouchableOpacity style={styles.menuItem} onPress={() => setActiveModal('karyawan')}>
+          <View style={styles.menuLeft}>
+            <View style={[styles.iconWrapper, { backgroundColor: '#EFF6FF' }]}>
+              <Ionicons name="people-outline" size={20} color="#2563EB" />
+            </View>
+            <View>
+              <ThemedText style={styles.menuTitle}>Data Karyawan</ThemedText>
+              <ThemedText style={styles.menuSubtitle}>Tambah, edit nama karyawan & status aktif pencuci</ThemedText>
+            </View>
           </View>
-          <View>
-            <ThemedText style={styles.menuTitle}>Data Karyawan</ThemedText>
-            <ThemedText style={styles.menuSubtitle}>Tambah, edit nama karyawan & status aktif pencuci</ThemedText>
+          <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+        </TouchableOpacity>
+
+        {/* 2. Kelola Jenis Motor & Tarif */}
+        <TouchableOpacity style={styles.menuItem} onPress={() => setActiveModal('motor')}>
+          <View style={styles.menuLeft}>
+            <View style={[styles.iconWrapper, { backgroundColor: '#ECFDF5' }]}>
+              <Ionicons name="bicycle-outline" size={20} color="#059669" />
+            </View>
+            <View>
+              <ThemedText style={styles.menuTitle}>Jenis Motor & Tarif</ThemedText>
+              <ThemedText style={styles.menuSubtitle}>Atur tipe kendaraan dan biaya cuci</ThemedText>
+            </View>
           </View>
+          <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+        </TouchableOpacity>
+
+        {/* 3. Pengaturan Durasi Penggajian Default (Owner) */}
+        <ThemedView type="backgroundElement" style={styles.settingCardBox}>
+          <View style={styles.menuLeft}>
+            <View style={[styles.iconWrapper, { backgroundColor: '#FEF3C7' }]}>
+              <Ionicons name="calendar-outline" size={20} color="#D97706" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <ThemedText style={styles.menuTitle}>Durasi Penggajian Operasional</ThemedText>
+              <ThemedText style={styles.menuSubtitle}>Pilih periode perhitungan komisi gaji karyawan</ThemedText>
+            </View>
+          </View>
+
+          <View style={styles.periodSelectorRow}>
+            <TouchableOpacity
+              style={[styles.periodOptionBtn, currentPeriod === 'harian' && styles.periodOptionBtnActive]}
+              onPress={() => handleSelectPeriod('harian')}
+            >
+              <ThemedText style={[styles.periodOptionText, currentPeriod === 'harian' && styles.periodOptionTextActive]}>
+                Harian
+              </ThemedText>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.periodOptionBtn, currentPeriod === 'mingguan' && styles.periodOptionBtnActive]}
+              onPress={() => handleSelectPeriod('mingguan')}
+            >
+              <ThemedText style={[styles.periodOptionText, currentPeriod === 'mingguan' && styles.periodOptionTextActive]}>
+                Mingguan
+              </ThemedText>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.periodOptionBtn, currentPeriod === 'bulanan' && styles.periodOptionBtnActive]}
+              onPress={() => handleSelectPeriod('bulanan')}
+            >
+              <ThemedText style={[styles.periodOptionText, currentPeriod === 'bulanan' && styles.periodOptionTextActive]}>
+                Bulanan
+              </ThemedText>
+            </TouchableOpacity>
+          </View>
+        </ThemedView>
+
+        <ThemedText style={styles.sectionHeader}>Setelan Perangkat & Data</ThemedText>
+
+        {/* 4. Pengaturan Printer */}
+        <TouchableOpacity style={styles.menuItem} onPress={() => setActiveModal('printer')}>
+          <View style={styles.menuLeft}>
+            <View style={[styles.iconWrapper, { backgroundColor: '#FFF7ED' }]}>
+              <Ionicons name="print-outline" size={20} color="#EA580C" />
+            </View>
+            <View>
+              <ThemedText style={styles.menuTitle}>Struk & Printer Bluetooth</ThemedText>
+              <ThemedText style={styles.menuSubtitle}>Atur informasi struk dan koneksi printer</ThemedText>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+        </TouchableOpacity>
+
+        {/* 5. Backup & Restore */}
+        <TouchableOpacity style={styles.menuItem} onPress={() => setActiveModal('backup')}>
+          <View style={styles.menuLeft}>
+            <View style={[styles.iconWrapper, { backgroundColor: '#F5F5F5' }]}>
+              <Ionicons name="server-outline" size={20} color="#4B5563" />
+            </View>
+            <View>
+              <ThemedText style={styles.menuTitle}>Backup & Restore Data</ThemedText>
+              <ThemedText style={styles.menuSubtitle}>Amankan data lokal ke file eksternal</ThemedText>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+        </TouchableOpacity>
+
+        <View style={styles.appFooter}>
+          <ThemedText style={styles.footerText}>Koko Motowash v1.0.0 (MVP)</ThemedText>
+          <ThemedText style={styles.footerTextSub}>Local-First Database SQLite & Drizzle</ThemedText>
         </View>
-        <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-      </TouchableOpacity>
+      </ScrollView>
 
-      {/* 2. Kelola Jenis Motor & Tarif */}
-      <TouchableOpacity style={styles.menuItem} onPress={() => setActiveModal('motor')}>
-        <View style={styles.menuLeft}>
-          <View style={[styles.iconWrapper, { backgroundColor: '#ECFDF5' }]}>
-            <Ionicons name="bicycle-outline" size={20} color="#059669" />
-          </View>
-          <View>
-            <ThemedText style={styles.menuTitle}>Jenis Motor & Tarif</ThemedText>
-            <ThemedText style={styles.menuSubtitle}>Atur tipe kendaraan dan biaya cuci</ThemedText>
-          </View>
-        </View>
-        <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-      </TouchableOpacity>
-
-      {/* 3. Pengaturan Durasi Penggajian Default (Owner) */}
-      <ThemedView type="backgroundElement" style={styles.settingCardBox}>
-        <View style={styles.menuLeft}>
-          <View style={[styles.iconWrapper, { backgroundColor: '#FEF3C7' }]}>
-            <Ionicons name="calendar-outline" size={20} color="#D97706" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <ThemedText style={styles.menuTitle}>Durasi Penggajian Operasional</ThemedText>
-            <ThemedText style={styles.menuSubtitle}>Pilih periode perhitungan komisi gaji karyawan</ThemedText>
-          </View>
-        </View>
-
-        <View style={styles.periodSelectorRow}>
-          <TouchableOpacity
-            style={[styles.periodOptionBtn, currentPeriod === 'harian' && styles.periodOptionBtnActive]}
-            onPress={() => handleSelectPeriod('harian')}
-          >
-            <ThemedText style={[styles.periodOptionText, currentPeriod === 'harian' && styles.periodOptionTextActive]}>
-              Harian
-            </ThemedText>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.periodOptionBtn, currentPeriod === 'mingguan' && styles.periodOptionBtnActive]}
-            onPress={() => handleSelectPeriod('mingguan')}
-          >
-            <ThemedText style={[styles.periodOptionText, currentPeriod === 'mingguan' && styles.periodOptionTextActive]}>
-              Mingguan
-            </ThemedText>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.periodOptionBtn, currentPeriod === 'bulanan' && styles.periodOptionBtnActive]}
-            onPress={() => handleSelectPeriod('bulanan')}
-          >
-            <ThemedText style={[styles.periodOptionText, currentPeriod === 'bulanan' && styles.periodOptionTextActive]}>
-              Bulanan
-            </ThemedText>
-          </TouchableOpacity>
-        </View>
-      </ThemedView>
-
-      <ThemedText style={styles.sectionHeader}>Setelan Perangkat & Data</ThemedText>
-
-      {/* 4. Pengaturan Printer */}
-      <TouchableOpacity style={styles.menuItem} onPress={() => setActiveModal('printer')}>
-        <View style={styles.menuLeft}>
-          <View style={[styles.iconWrapper, { backgroundColor: '#FFF7ED' }]}>
-            <Ionicons name="print-outline" size={20} color="#EA580C" />
-          </View>
-          <View>
-            <ThemedText style={styles.menuTitle}>Struk & Printer Bluetooth</ThemedText>
-            <ThemedText style={styles.menuSubtitle}>Atur informasi struk dan koneksi printer</ThemedText>
-          </View>
-        </View>
-        <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-      </TouchableOpacity>
-
-      {/* 5. Backup & Restore */}
-      <TouchableOpacity style={styles.menuItem} onPress={() => setActiveModal('backup')}>
-        <View style={styles.menuLeft}>
-          <View style={[styles.iconWrapper, { backgroundColor: '#F5F5F5' }]}>
-            <Ionicons name="server-outline" size={20} color="#4B5563" />
-          </View>
-          <View>
-            <ThemedText style={styles.menuTitle}>Backup & Restore Data</ThemedText>
-            <ThemedText style={styles.menuSubtitle}>Amankan data lokal ke file eksternal</ThemedText>
-          </View>
-        </View>
-        <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-      </TouchableOpacity>
-
-      <View style={styles.appFooter}>
-        <ThemedText style={styles.footerText}>Koko Motowash v1.0.0 (MVP)</ThemedText>
-        <ThemedText style={styles.footerTextSub}>Local-First Database SQLite & Drizzle</ThemedText>
-      </View>
-
-      {/* Modal Sub-Sistem */}
+      {/* Modal Sub-Sistem - diletakkan di luar ScrollView */}
       <EmployeeManagementModal visible={activeModal === 'karyawan'} onClose={() => setActiveModal(null)} />
       <MotorManagementModal visible={activeModal === 'motor'} onClose={() => setActiveModal(null)} />
       <PrinterSettingsModal visible={activeModal === 'printer'} onClose={() => setActiveModal(null)} />
       <BackupRestoreModal visible={activeModal === 'backup'} onClose={() => setActiveModal(null)} />
-    </ScrollView>
+    </View>
   );
 }
 

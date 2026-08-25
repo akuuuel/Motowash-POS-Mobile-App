@@ -153,15 +153,18 @@ function NewTransactionView() {
   };
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <View style={{ flex: 1 }}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-          <ScrollView
-            style={styles.formContainer}
-            contentContainerStyle={styles.formContent}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-          >
+    <View style={{ flex: 1 }}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <ScrollView
+          style={styles.formContainer}
+          contentContainerStyle={[styles.formContent, { paddingBottom: 60 }]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={true}
+          bounces={true}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+            <View style={{ flex: 1 }}>
       {/* A. Plat Nomor */}
       <ThemedText style={styles.inputLabel}>Plat Nomor Motor</ThemedText>
       <TextInput
@@ -290,8 +293,12 @@ function NewTransactionView() {
           </>
         )}
       </TouchableOpacity>
+            </View>
+          </TouchableWithoutFeedback>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-      {/* MODAL SUKSES & CETAK STRUK */}
+      {/* MODAL SUKSES & CETAK STRUK - di luar ScrollView agar tidak mengganggu scroll */}
       <Modal
         animationType="fade"
         transparent={true}
@@ -326,10 +333,7 @@ function NewTransactionView() {
           </ThemedView>
         </View>
       </Modal>
-          </ScrollView>
-        </KeyboardAvoidingView>
-      </View>
-    </TouchableWithoutFeedback>
+    </View>
   );
 }
 

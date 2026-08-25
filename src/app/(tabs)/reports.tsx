@@ -167,7 +167,13 @@ export default function ReportsScreen() {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="always" keyboardDismissMode="none">
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, { paddingBottom: 60 }]}
+      showsVerticalScrollIndicator={true}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
+    >
       {/* 1. Header Screen */}
       <View style={styles.headerBlock}>
         <ThemedText style={styles.screenTitle}>Laporan & Penggajian</ThemedText>
