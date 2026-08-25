@@ -32,12 +32,15 @@ export default function DashboardScreen() {
   const loadDashboardData = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Query transaksi hari ini (mengonversi UTC database ke timezone lokal perangkat)
+      // 1. Query transaksi hari ini (mengonversi UTC database ke timezone lokal perangkat dengan fallback dual-condition)
       const todayTxs = await db.select()
         .from(transactions)
         .where(
           and(
-            sql`date(${transactions.createdAt}, 'localtime') = date('now', 'localtime')`,
+            sql`(
+              date(${transactions.createdAt}, 'localtime') = date('now', 'localtime')
+              OR date(${transactions.createdAt}) = date('now', 'localtime')
+            )`,
             eq(transactions.status, 'completed')
           )
         )
@@ -333,10 +336,16 @@ export default function DashboardScreen() {
                 keyboardShouldPersistTaps="always"
                 keyboardDismissMode="none"
                 renderItem={({ item }) => {
-                  const txTime = new Date(item.createdAt).toLocaleTimeString('id-ID', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  });
+                  let txTime = '';
+                  try {
+                    const normalizedStr = item.createdAt ? String(item.createdAt).replace(' ', 'T') : '';
+                    const dateObj = new Date(normalizedStr);
+                    txTime = isNaN(dateObj.getTime())
+                      ? ''
+                      : dateObj.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+                  } catch (e) {
+                    txTime = '';
+                  }
 
                   return (
                     <View style={styles.modalTxRow}>

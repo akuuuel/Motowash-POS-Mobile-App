@@ -11,6 +11,8 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/themed-text';
@@ -20,7 +22,7 @@ import { useSettingsStore } from '../store/useSettingsStore';
 import { db } from '../db/client';
 import { transactions, payrollPayouts, employees } from '../db/schema';
 import { eq, and, gte, lte, sql, desc, or } from 'drizzle-orm';
-import { buildSlipGajiBytes, stringToBytes } from '../utils/bluetoothPrinter';
+import { printSlipGajiThermal } from '../utils/bluetoothPrinter';
 
 interface PayrollManagementModalProps {
   visible: boolean;
@@ -143,8 +145,8 @@ export function PayrollManagementModal({ visible, onClose }: PayrollManagementMo
           eq(transactions.employeeName, selectedEmp.name)
         ),
         eq(transactions.status, 'completed'),
-        sql`date(${transactions.createdAt}, 'localtime') >= date(${startDateStr})`,
-        sql`date(${transactions.createdAt}, 'localtime') <= date(${endDateStr})`
+        sql`(date(${transactions.createdAt}, 'localtime') >= date(${startDateStr}) OR date(${transactions.createdAt}) >= date(${startDateStr}))`,
+        sql`(date(${transactions.createdAt}, 'localtime') <= date(${endDateStr}) OR date(${transactions.createdAt}) <= date(${endDateStr}))`
       ];
 
       if (lastPaid && (lastPaid.paidAt || lastPaid.createdAt)) {
@@ -276,8 +278,8 @@ export function PayrollManagementModal({ visible, onClose }: PayrollManagementMo
         breakdownJson: JSON.stringify(categoryBreakdown),
         status: 'paid',
         notes: notesInput.trim() || null,
-        paidAt: sql`datetime('now', 'localtime')`,
-        createdAt: sql`datetime('now', 'localtime')`,
+        paidAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
       });
 
       Alert.alert('Sukses', `Gaji ${selectedEmployee.name} berhasil ditandai TERBAYARKAN.`);
@@ -324,8 +326,9 @@ export function PayrollManagementModal({ visible, onClose }: PayrollManagementMo
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <ThemedView type="backgroundElement" style={styles.modalSubScreen}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <ThemedView type="backgroundElement" style={styles.modalSubScreen}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
           {/* Header Modal */}
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={onClose}>
@@ -359,10 +362,16 @@ export function PayrollManagementModal({ visible, onClose }: PayrollManagementMo
           </View>
 
           {activeTab === 'hitung' ? (
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="always" keyboardDismissMode="none">
+            <ScrollView
+              style={styles.modalBody}
+              contentContainerStyle={{ paddingBottom: 220 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+            >
               {/* 1. Pilih Karyawan */}
               <ThemedText style={styles.inputLabel}>Pilih Karyawan Pencuci</ThemedText>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalEmpPicker} keyboardShouldPersistTaps="always">
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalEmpPicker} keyboardShouldPersistTaps="handled">
               {employeesList.map((emp) => (
                 <TouchableOpacity
                   key={emp.id}
@@ -555,8 +564,8 @@ export function PayrollManagementModal({ visible, onClose }: PayrollManagementMo
                 data={payoutHistory}
                 keyExtractor={(item) => String(item.id)}
                 showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="always"
-                keyboardDismissMode="none"
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
                 renderItem={({ item }) => (
                   <View style={styles.historyCard}>
                     <View style={styles.historyHeader}>
@@ -653,13 +662,15 @@ export function PayrollManagementModal({ visible, onClose }: PayrollManagementMo
               {/* Action Print Button */}
               <TouchableOpacity
                 style={styles.printActionBtn}
-                onPress={() => {
+                onPress={async () => {
                   if (slipDataToPrint) {
-                    const bytesStr = buildSlipGajiBytes(slipDataToPrint);
-                    // Bluetooth print ready
+                    try {
+                      await printSlipGajiThermal(slipDataToPrint);
+                      setPrintModalVisible(false);
+                    } catch (e) {
+                      Alert.alert('Gagal Cetak', 'Terjadi kesalahan saat memproses cetakan.');
+                    }
                   }
-                  Alert.alert('Cetak Slip Gaji', 'Slip Gaji berhasil dikirimkan ke printer Bluetooth thermal.');
-                  setPrintModalVisible(false);
                 }}
               >
                 <Ionicons name="print" size={20} color="#FFFFFF" />
@@ -668,8 +679,9 @@ export function PayrollManagementModal({ visible, onClose }: PayrollManagementMo
             </View>
           </View>
         </Modal>
-        </KeyboardAvoidingView>
-      </ThemedView>
+          </KeyboardAvoidingView>
+        </ThemedView>
+      </TouchableWithoutFeedback>
     </Modal>
   );
 }

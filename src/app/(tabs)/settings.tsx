@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   ScrollView,
@@ -11,6 +11,8 @@ import {
   Switch,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/themed-text';
@@ -23,6 +25,7 @@ import { eq } from 'drizzle-orm';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
+import { printReceiptThermal, openBluetoothSettings, getNativePairedDevices, BluetoothDeviceInfo } from '../../utils/bluetoothPrinter';
 
 export default function SettingsScreen() {
   const settingsStore = useSettingsStore();
@@ -42,7 +45,7 @@ export default function SettingsScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="always" keyboardDismissMode="none">
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
       <ThemedText style={styles.sectionHeader}>Pengelolaan Usaha</ThemedText>
       
       {/* 1. Kelola Karyawan */}
@@ -219,17 +222,18 @@ function EmployeeManagementModal({ visible, onClose }: { visible: boolean; onClo
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <ThemedView type="backgroundElement" style={styles.modalSubScreen}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="arrow-back" size={24} color="#1E293B" />
-            </TouchableOpacity>
-            <ThemedText type="default" style={styles.modalSubTitle}>Data Karyawan</ThemedText>
-            <View style={{ width: 24 }} />
-          </View>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <ThemedView type="backgroundElement" style={styles.modalSubScreen}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={onClose}>
+                <Ionicons name="arrow-back" size={24} color="#1E293B" />
+              </TouchableOpacity>
+              <ThemedText type="default" style={styles.modalSubTitle}>Data Karyawan</ThemedText>
+              <View style={{ width: 24 }} />
+            </View>
 
-          <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="always" keyboardDismissMode="none">
+            <ScrollView style={styles.modalBody} contentContainerStyle={{ paddingBottom: 220 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
           {/* Form input karyawan baru */}
           <ThemedText style={styles.inputLabel}>Tambah Karyawan Baru</ThemedText>
           <View style={{ gap: 10, marginBottom: 20 }}>
@@ -309,9 +313,10 @@ function EmployeeManagementModal({ visible, onClose }: { visible: boolean; onClo
             </View>
           ))}
         </ScrollView>
-        </KeyboardAvoidingView>
-      </ThemedView>
-    </Modal>
+            </KeyboardAvoidingView>
+          </ThemedView>
+        </TouchableWithoutFeedback>
+      </Modal>
   );
 }
 
@@ -384,17 +389,18 @@ function MotorManagementModal({ visible, onClose }: { visible: boolean; onClose:
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <ThemedView type="backgroundElement" style={styles.modalSubScreen}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="arrow-back" size={24} color="#1E293B" />
-            </TouchableOpacity>
-            <ThemedText type="default" style={styles.modalSubTitle}>Jenis Motor, Tarif & Komisi</ThemedText>
-            <View style={{ width: 24 }} />
-          </View>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <ThemedView type="backgroundElement" style={styles.modalSubScreen}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={onClose}>
+                <Ionicons name="arrow-back" size={24} color="#1E293B" />
+              </TouchableOpacity>
+              <ThemedText type="default" style={styles.modalSubTitle}>Jenis Motor, Tarif & Komisi</ThemedText>
+              <View style={{ width: 24 }} />
+            </View>
 
-          <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="always" keyboardDismissMode="none">
+            <ScrollView style={styles.modalBody} contentContainerStyle={{ paddingBottom: 220 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
           <ThemedText style={styles.inputLabel}>Tambah Jenis Motor & Tarif Baru</ThemedText>
           <TextInput
             style={[styles.textInput, { marginBottom: 10 }]}
@@ -511,9 +517,10 @@ function MotorManagementModal({ visible, onClose }: { visible: boolean; onClose:
             </View>
           ))}
         </ScrollView>
-        </KeyboardAvoidingView>
-      </ThemedView>
-    </Modal>
+            </KeyboardAvoidingView>
+          </ThemedView>
+        </TouchableWithoutFeedback>
+      </Modal>
   );
 }
 
@@ -522,24 +529,48 @@ function MotorManagementModal({ visible, onClose }: { visible: boolean; onClose:
 // ==========================================
 function PrinterSettingsModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const store = useSettingsStore();
-
   const [bizName, setBizName] = useState(store.businessName);
   const [bizAddr, setBizAddr] = useState(store.businessAddress);
   const [bizPhone, setBizPhone] = useState(store.businessPhone);
   const [thankMsg, setThankMsg] = useState(store.thankYouMessage);
   const [saving, setSaving] = useState(false);
 
+  const [pairedDevices, setPairedDevices] = useState<BluetoothDeviceInfo[]>([]);
+  const [scanning, setScanning] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setBizName(store.businessName);
+      setBizAddr(store.businessAddress);
+      setBizPhone(store.businessPhone);
+      setThankMsg(store.thankYouMessage);
+      fetchPairedDevices();
+    }
+  }, [visible, store]);
+
+  const fetchPairedDevices = async () => {
+    setScanning(true);
+    try {
+      const devs = await getNativePairedDevices();
+      setPairedDevices(devs);
+    } catch (e) {
+      console.log('Fetch devices error:', e);
+    } finally {
+      setScanning(false);
+    }
+  };
+
   const handleSaveSettings = async () => {
     setSaving(true);
     try {
       await store.updateSettings({
-        business_name: bizName,
-        business_address: bizAddr,
-        business_phone: bizPhone,
-        thank_you_message: thankMsg,
+        businessName: bizName,
+        businessAddress: bizAddr,
+        businessPhone: bizPhone,
+        thankYouMessage: thankMsg,
       });
-      Alert.alert('Sukses', 'Informasi struk berhasil diperbarui.');
-    } catch (e) {
+      Alert.alert('Berhasil', 'Pengaturan struk berhasil disimpan!');
+    } catch (error) {
       Alert.alert('Gagal', 'Gagal memperbarui pengaturan.');
     } finally {
       setSaving(false);
@@ -548,17 +579,18 @@ function PrinterSettingsModal({ visible, onClose }: { visible: boolean; onClose:
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <ThemedView type="backgroundElement" style={styles.modalSubScreen}>
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="arrow-back" size={24} color="#1E293B" />
-            </TouchableOpacity>
-            <ThemedText type="default" style={styles.modalSubTitle}>Printer & Struktur Struk</ThemedText>
-            <View style={{ width: 24 }} />
-          </View>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <ThemedView type="backgroundElement" style={styles.modalSubScreen}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={onClose}>
+                <Ionicons name="arrow-back" size={24} color="#1E293B" />
+              </TouchableOpacity>
+              <ThemedText type="default" style={styles.modalSubTitle}>Printer & Struktur Struk</ThemedText>
+              <View style={{ width: 24 }} />
+            </View>
 
-          <ScrollView style={styles.modalBody} keyboardShouldPersistTaps="always" keyboardDismissMode="none">
+            <ScrollView style={styles.modalBody} contentContainerStyle={{ paddingBottom: 220 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
             <ThemedText style={styles.inputLabel}>Nama Usaha (Header Struk)</ThemedText>
             <TextInput style={[styles.textInput, { marginBottom: 12 }]} placeholder="Nama Usaha" placeholderTextColor="#94A3B8" value={bizName} onChangeText={setBizName} />
 
@@ -575,19 +607,108 @@ function PrinterSettingsModal({ visible, onClose }: { visible: boolean; onClose:
               {saving ? <ActivityIndicator color="#FFF" /> : <ThemedText style={styles.saveBtnText}>Simpan Pengaturan Struk</ThemedText>}
             </TouchableOpacity>
 
-            {/* Sesi scan printer Bluetooth */}
-            <ThemedText style={[styles.inputLabel, { marginTop: 30 }]}>Perangkat Printer Bluetooth (ESC/POS)</ThemedText>
+            {/* Sesi Pengujian & Cetak Ke Printer Bluetooth Thermal */}
+            <ThemedText style={[styles.inputLabel, { marginTop: 30 }]}>Koneksi Printer Bluetooth Thermal (58mm)</ThemedText>
             <ThemedView type="backgroundElement" style={styles.printerScannerCard}>
-              <Ionicons name="bluetooth-outline" size={32} color="#2563EB" />
-              <ThemedText style={styles.scanText}>Pengaturan Bluetooth Thermal Printer memerlukan Expo Development Build di Android.</ThemedText>
-              <TouchableOpacity style={styles.scanBtn} onPress={() => Alert.alert('Detail', 'Alat pemindai sedang mensimulasikan koneksi printer 58mm.')}>
-                <ThemedText style={styles.scanBtnText}>Hubungkan Printer Bawaan (PRINTER_58)</ThemedText>
+              <Ionicons name="print-outline" size={32} color="#2563EB" />
+              <ThemedText style={styles.scanText}>
+                Fitur Cetak Native Murni: Aplikasi Koko Motowash terhubung langsung ke socket Bluetooth printer Anda tanpa memerlukan aplikasi tambahan.
+              </ThemedText>
+              
+              <TouchableOpacity
+                style={[styles.scanBtn, { backgroundColor: '#8B5CF6', marginBottom: 10 }]}
+                onPress={openBluetoothSettings}
+              >
+                <Ionicons name="bluetooth" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <ThemedText style={styles.scanBtnText}>Buka Bluetooth HP & Pair Printer Baru</ThemedText>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.scanBtn, { backgroundColor: '#0284C7', marginBottom: 10 }]}
+                onPress={fetchPairedDevices}
+                disabled={scanning}
+              >
+                {scanning ? (
+                  <ActivityIndicator color="#FFF" size="small" style={{ marginRight: 6 }} />
+                ) : (
+                  <Ionicons name="refresh" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                )}
+                <ThemedText style={styles.scanBtnText}>
+                  {scanning ? 'Memindai Device HP...' : 'Pindai Device Paired Native'}
+                </ThemedText>
+              </TouchableOpacity>
+
+              {pairedDevices.length > 0 && (
+                <View style={{ width: '100%', marginTop: 8, marginBottom: 12 }}>
+                  <ThemedText style={{ fontSize: 12, fontWeight: '600', color: '#475569', marginBottom: 6 }}>
+                    Device Paired Terdeteksi:
+                  </ThemedText>
+                  {pairedDevices.map((dev, idx) => (
+                    <TouchableOpacity
+                      key={idx}
+                      style={{
+                        padding: 10,
+                        backgroundColor: store.printerMacAddress === dev.address ? '#EFF6FF' : '#F1F5F9',
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: store.printerMacAddress === dev.address ? '#2563EB' : '#CBD5E1',
+                        marginBottom: 6,
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                      onPress={() => {
+                        store.updateSettings({
+                          printerName: dev.name,
+                          printerMacAddress: dev.address,
+                        });
+                        Alert.alert('Device Dipilih', `Printer ${dev.name} (${dev.address}) telah disimpan sebagai printer utama.`);
+                      }}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <ThemedText style={{ fontSize: 13, fontWeight: 'bold', color: '#1E293B' }}>{dev.name}</ThemedText>
+                        <ThemedText style={{ fontSize: 11, color: '#64748B' }}>MAC: {dev.address}</ThemedText>
+                      </View>
+                      {store.printerMacAddress === dev.address && (
+                        <Ionicons name="checkmark-circle" size={20} color="#2563EB" />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={styles.scanBtn}
+                onPress={async () => {
+                  try {
+                    await printReceiptThermal({
+                      businessName: bizName || store.businessName,
+                      businessAddress: bizAddr || store.businessAddress,
+                      businessPhone: bizPhone || store.businessPhone,
+                      thankYouMessage: thankMsg || store.thankYouMessage,
+                      transactionNumber: 'TEST-001',
+                      createdAt: new Date().toISOString(),
+                      plateNumber: 'DD 1234 TEST',
+                      vehicleCategoryName: 'Motor Bebek / Matic',
+                      employeeName: 'Kasir Uji Coba',
+                      paymentMethod: 'Tunai',
+                      originalPrice: 15000,
+                      finalPrice: 15000,
+                    }, store.printerMacAddress);
+                  } catch (e) {
+                    Alert.alert('Gagal Cetak', 'Terjadi kesalahan saat memproses cetakan uji coba.');
+                  }
+                }}
+              >
+                <Ionicons name="print" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <ThemedText style={styles.scanBtnText}>Tes Cetak Struk Native (Direct Socket)</ThemedText>
               </TouchableOpacity>
             </ThemedView>
           </ScrollView>
-        </KeyboardAvoidingView>
-      </ThemedView>
-    </Modal>
+            </KeyboardAvoidingView>
+          </ThemedView>
+        </TouchableWithoutFeedback>
+      </Modal>
   );
 }
 

@@ -133,7 +133,7 @@ export const useTransactionStore = create<TransactionState>((set, get) => ({
       paymentMethod: form.paymentMethod,
       notes: form.notes,
       status: 'completed',
-      createdAt: sql`datetime('now', 'localtime')`,
+      createdAt: new Date().toISOString(),
     }).returning();
 
     // 4. Reset Form & Return Transaksi yang Berhasil

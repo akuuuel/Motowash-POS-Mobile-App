@@ -11,6 +11,8 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from '@/components/themed-text';
@@ -21,7 +23,7 @@ import { useSettingsStore } from '../../store/useSettingsStore';
 import { db } from '../../db/client';
 import { transactions, transactionCancellations } from '../../db/schema';
 import { eq, desc, like, and } from 'drizzle-orm';
-import { buildReceiptBytes } from '../../utils/bluetoothPrinter';
+import { printReceiptThermal } from '../../utils/bluetoothPrinter';
 
 export default function TransactionsScreen() {
   const [activeTab, setActiveTab] = useState<'baru' | 'riwayat'>('baru');
@@ -127,41 +129,39 @@ function NewTransactionView() {
     }
   };
 
-  const handlePrintReceipt = () => {
+  const handlePrintReceipt = async () => {
     if (!lastSavedTx) return;
-    
-    // Susun struk belanja
-    const receiptText = buildReceiptBytes({
-      businessName: settings.businessName,
-      businessAddress: settings.businessAddress,
-      businessPhone: settings.businessPhone,
-      thankYouMessage: settings.thankYouMessage,
-      transactionNumber: lastSavedTx.transactionNumber,
-      createdAt: lastSavedTx.createdAt,
-      plateNumber: lastSavedTx.plateNumber,
-      vehicleCategoryName: lastSavedTx.vehicleCategoryName,
-      employeeName: lastSavedTx.employeeName,
-      paymentMethod: lastSavedTx.paymentMethod,
-      originalPrice: lastSavedTx.originalPrice,
-      finalPrice: lastSavedTx.finalPrice,
-    });
-
-    // Tampilkan pratinjau struk (Mock Printing)
-    Alert.alert(
-      'Mencetak Struk (Mock)',
-      `Kirim perintah cetak:\n\n${receiptText}\n\n(Catatan: Pastikan printer thermal bluetooth sudah tersambung di menu utama).`,
-      [{ text: 'OK', onPress: () => setReceiptModalVisible(false) }]
-    );
+    try {
+      await printReceiptThermal({
+        businessName: settings.businessName,
+        businessAddress: settings.businessAddress,
+        businessPhone: settings.businessPhone,
+        thankYouMessage: settings.thankYouMessage,
+        transactionNumber: lastSavedTx.transactionNumber,
+        createdAt: lastSavedTx.createdAt,
+        plateNumber: lastSavedTx.plateNumber,
+        vehicleCategoryName: lastSavedTx.vehicleCategoryName,
+        employeeName: lastSavedTx.employeeName,
+        paymentMethod: lastSavedTx.paymentMethod,
+        originalPrice: lastSavedTx.originalPrice,
+        finalPrice: lastSavedTx.finalPrice,
+      });
+      setReceiptModalVisible(false);
+    } catch (e) {
+      Alert.alert('Gagal Cetak', 'Terjadi kesalahan saat memproses cetakan.');
+    }
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-      <ScrollView
-        style={styles.formContainer}
-        contentContainerStyle={styles.formContent}
-        keyboardShouldPersistTaps="always"
-        keyboardDismissMode="none"
-      >
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <View style={{ flex: 1 }}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+          <ScrollView
+            style={styles.formContainer}
+            contentContainerStyle={styles.formContent}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+          >
       {/* A. Plat Nomor */}
       <ThemedText style={styles.inputLabel}>Plat Nomor Motor</ThemedText>
       <TextInput
@@ -326,8 +326,10 @@ function NewTransactionView() {
           </ThemedView>
         </View>
       </Modal>
-      </ScrollView>
-    </KeyboardAvoidingView>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </View>
+    </TouchableWithoutFeedback>
   );
 }
 
@@ -410,29 +412,26 @@ function TransactionHistoryView() {
     }
   };
 
-  const handlePrintAgain = () => {
+  const handlePrintAgain = async () => {
     if (!selectedTx) return;
-    
-    const receiptText = buildReceiptBytes({
-      businessName: settings.businessName,
-      businessAddress: settings.businessAddress,
-      businessPhone: settings.businessPhone,
-      thankYouMessage: settings.thankYouMessage,
-      transactionNumber: selectedTx.transactionNumber,
-      createdAt: selectedTx.createdAt,
-      plateNumber: selectedTx.plateNumber,
-      vehicleCategoryName: selectedTx.vehicleCategoryName,
-      employeeName: selectedTx.employeeName,
-      paymentMethod: selectedTx.paymentMethod,
-      originalPrice: selectedTx.originalPrice,
-      finalPrice: selectedTx.finalPrice,
-    });
-
-    Alert.alert(
-      'Mencetak Struk (Mock)',
-      `Kirim perintah cetak:\n\n${receiptText}`,
-      [{ text: 'OK' }]
-    );
+    try {
+      await printReceiptThermal({
+        businessName: settings.businessName,
+        businessAddress: settings.businessAddress,
+        businessPhone: settings.businessPhone,
+        thankYouMessage: settings.thankYouMessage,
+        transactionNumber: selectedTx.transactionNumber,
+        createdAt: selectedTx.createdAt,
+        plateNumber: selectedTx.plateNumber,
+        vehicleCategoryName: selectedTx.vehicleCategoryName,
+        employeeName: selectedTx.employeeName,
+        paymentMethod: selectedTx.paymentMethod,
+        originalPrice: selectedTx.originalPrice,
+        finalPrice: selectedTx.finalPrice,
+      });
+    } catch (e) {
+      Alert.alert('Gagal Cetak', 'Terjadi kesalahan saat memproses cetakan.');
+    }
   };
 
   const filteredHistory = history.filter((item) => {
@@ -470,17 +469,21 @@ function TransactionHistoryView() {
           data={filteredHistory}
           keyExtractor={(item) => String(item.id)}
           contentContainerStyle={styles.listContent}
-          keyboardShouldPersistTaps="always"
-          keyboardDismissMode="none"
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           renderItem={({ item }) => {
             const isCancelled = item.status === 'cancelled';
-            const localDate = new Date(item.createdAt).toLocaleString('id-ID', {
-              day: '2-digit',
-              month: '2-digit',
-              hour: '2-digit',
-              minute: '2-digit'
-            });
-            const formattedDate = localDate === 'Invalid Date' ? item.createdAt : localDate;
+            const normalizedStr = item.createdAt ? String(item.createdAt).replace(' ', 'T') : '';
+            const dateObj = new Date(normalizedStr);
+            const localDate = isNaN(dateObj.getTime())
+              ? item.createdAt
+              : dateObj.toLocaleString('id-ID', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                });
+            const formattedDate = localDate;
 
             return (
               <TouchableOpacity
@@ -712,7 +715,7 @@ const styles = StyleSheet.create({
   },
   formContent: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 220,
   },
   inputLabel: {
     fontSize: 13,

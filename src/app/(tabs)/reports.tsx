@@ -36,9 +36,15 @@ export default function ReportsScreen() {
       let txDateConstraint = sql`1=1`;
       
       if (period === 'today') {
-        txDateConstraint = sql`date(${transactions.createdAt}, 'localtime') = date('now', 'localtime')`;
+        txDateConstraint = sql`(
+          date(${transactions.createdAt}, 'localtime') = date('now', 'localtime')
+          OR date(${transactions.createdAt}) = date('now', 'localtime')
+        )`;
       } else if (period === 'month') {
-        txDateConstraint = sql`strftime('%Y-%m', ${transactions.createdAt}, 'localtime') = strftime('%Y-%m', 'now', 'localtime')`;
+        txDateConstraint = sql`(
+          strftime('%Y-%m', ${transactions.createdAt}, 'localtime') = strftime('%Y-%m', 'now', 'localtime')
+          OR strftime('%Y-%m', ${transactions.createdAt}) = strftime('%Y-%m', 'now', 'localtime')
+        )`;
       }
 
       // Query transaksi pencucian
@@ -64,9 +70,15 @@ export default function ReportsScreen() {
       // Sebelumnya selalu menampilkan total SEMUA waktu meski filter "Hari Ini" aktif
       let payoutDateConstraint = sql`1=1`;
       if (period === 'today') {
-        payoutDateConstraint = sql`date(${payrollPayouts.paidAt}, 'localtime') = date('now', 'localtime')`;
+        payoutDateConstraint = sql`(
+          date(${payrollPayouts.paidAt}, 'localtime') = date('now', 'localtime')
+          OR date(${payrollPayouts.paidAt}) = date('now', 'localtime')
+        )`;
       } else if (period === 'month') {
-        payoutDateConstraint = sql`strftime('%Y-%m', ${payrollPayouts.paidAt}, 'localtime') = strftime('%Y-%m', 'now', 'localtime')`;
+        payoutDateConstraint = sql`(
+          strftime('%Y-%m', ${payrollPayouts.paidAt}, 'localtime') = strftime('%Y-%m', 'now', 'localtime')
+          OR strftime('%Y-%m', ${payrollPayouts.paidAt}) = strftime('%Y-%m', 'now', 'localtime')
+        )`;
       }
 
       const payouts = await db.select().from(payrollPayouts).where(payoutDateConstraint);
