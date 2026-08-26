@@ -17,31 +17,21 @@ import {
 
 const { BluetoothPrinterModule } = NativeModules;
 
-// Log status modul saat startup untuk memudahkan debugging
-if (__DEV__) {
-  console.log('[BT] BluetoothPrinterModule tersedia:', !!BluetoothPrinterModule);
-  console.log('[BT] printRawBytes tersedia:', !!BluetoothPrinterModule?.printRawBytes);
-  console.log('[BT] getPairedDevices tersedia:', !!BluetoothPrinterModule?.getPairedDevices);
-}
-
 export interface BluetoothDeviceInfo {
   name: string;
   address: string;
 }
 
-// Re-export formatter types & utilities for backward compatibility
 export { ReceiptData, SlipGajiData } from './receiptFormatter';
 
 /**
- * Request runtime Bluetooth permissions on Android
- * (Menangani izin BLUETOOTH_CONNECT & BLUETOOTH_SCAN pada Android 12+)
+ * Meminta Izin Akses Bluetooth di Android secara Profesional
  */
 export const requestBluetoothPermissions = async (): Promise<boolean> => {
   if (Platform.OS !== 'android') return true;
 
   try {
     if (Platform.Version >= 31) {
-      console.log('[BT] Meminta izin Bluetooth untuk Android 12+...');
       const granted = await PermissionsAndroid.requestMultiple([
         PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
         PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
@@ -49,12 +39,11 @@ export const requestBluetoothPermissions = async (): Promise<boolean> => {
       ]);
 
       const connectStatus = granted[PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT];
-      console.log('[BT] BLUETOOTH_CONNECT status:', connectStatus);
 
       if (connectStatus !== PermissionsAndroid.RESULTS.GRANTED) {
         Alert.alert(
           'Izin Bluetooth Diperlukan',
-          'Izin Bluetooth belum diaktifkan untuk aplikasi ini. Silakan izinkan akses Bluetooth di Pengaturan HP Anda.',
+          'Aplikasi membutuhkan izin Bluetooth untuk terhubung ke printer thermal Anda. Silakan izinkan di Pengaturan HP.',
           [
             { text: 'Batal', style: 'cancel' },
             { text: 'Buka Pengaturan', onPress: () => Linking.openSettings() },
@@ -64,35 +53,28 @@ export const requestBluetoothPermissions = async (): Promise<boolean> => {
       }
       return true;
     } else {
-      console.log('[BT] Android < 12, meminta ACCESS_FINE_LOCATION...');
       await PermissionsAndroid.request(
         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
       );
       return true;
     }
   } catch (err) {
-    console.warn('[BT] Permission request error:', err);
+    console.warn('[BT] Permission error:', err);
     return true;
   }
 };
 
 /**
- * Mendapatkan Daftar Device Bluetooth Thermal yang Sudah Di-Pairing di HP
+ * Mendapatkan Daftar Device Bluetooth Thermal yang Dipasangkan (Paired) di HP
  */
 export const getNativePairedDevices = async (): Promise<BluetoothDeviceInfo[]> => {
   if (Platform.OS !== 'android') return [];
 
-  if (!BluetoothPrinterModule) {
-    console.warn('[BT] BluetoothPrinterModule tidak ditemukan. Pastikan APK sudah di-rebuild setelah penambahan modul native.');
+  if (!BluetoothPrinterModule || !BluetoothPrinterModule.getPairedDevices) {
     Alert.alert(
-      'Modul Printer Tidak Ditemukan',
-      'Modul Bluetooth native tidak tersedia. Pastikan Anda menggunakan APK build terbaru (bukan Expo Go).'
+      'Koneksi Printer Tidak Tersedia',
+      'Modul printer native tidak dapat diakses pada perangkat ini.'
     );
-    return [];
-  }
-
-  if (!BluetoothPrinterModule.getPairedDevices) {
-    console.warn('[BT] Method getPairedDevices tidak tersedia di modul.');
     return [];
   }
 
@@ -100,19 +82,20 @@ export const getNativePairedDevices = async (): Promise<BluetoothDeviceInfo[]> =
   if (!hasPerms) return [];
 
   try {
-    console.log('[BT] Memanggil getPairedDevices...');
     const devices = await BluetoothPrinterModule.getPairedDevices();
-    console.log('[BT] Perangkat paired ditemukan:', devices?.length ?? 0);
     return devices || [];
   } catch (e: any) {
     console.error('[BT] getPairedDevices error:', e);
-    Alert.alert('Gagal Ambil Daftar Printer', e?.message || 'Pastikan Bluetooth aktif dan printer sudah di-pair di Pengaturan Bluetooth HP.');
+    Alert.alert(
+      'Gagal Memuat Daftar Printer',
+      e?.message || 'Pastikan Bluetooth dalam keadaan menyala dan printer sudah dipasangkan di Pengaturan Bluetooth HP.'
+    );
   }
   return [];
 };
 
 /**
- * Membuka Halaman Pengaturan Bluetooth HP Android Secara Langsung
+ * Membuka Halaman Pengaturan Bluetooth HP Android
  */
 export const openBluetoothSettings = async () => {
   if (Platform.OS === 'android') {
@@ -127,128 +110,45 @@ export const openBluetoothSettings = async () => {
 };
 
 /**
- * Membuka Halaman Pengaturan Layanan Cetak Bawaan HP Android
- */
-export const openAndroidPrintSettings = async () => {
-  if (Platform.OS === 'android') {
-    try {
-      await Linking.sendIntent('android.settings.ACTION_PRINT_SETTINGS');
-    } catch (e) {
-      await openBluetoothSettings();
-    }
-  } else {
-    await Linking.openSettings();
-  }
-};
-
-/**
- * Membuka Halaman Download Driver Bluetooth Printer RawBT di Play Store
- */
-export const openRawBTPlayStore = () => {
-  Linking.openURL('market://details?id=ru.a414.rawbt').catch(() => {
-    Linking.openURL('https://play.google.com/store/apps/details?id=ru.a414.rawbt');
-  });
-};
-
-/**
- * Fungsi Utama Pengiriman Byte Raw ke Native Bluetooth Module dengan Penanganan Error Ramah Pengguna
- */
-/**
- * Fungsi Utama Pengiriman Byte Raw ke Native Bluetooth Module
+ * Fungsi Pengiriman Data ESC/POS ke Printer Thermal via Bluetooth Direct Socket Native
  */
 const sendToNativePrinter = async (macAddress: string, base64Data: string): Promise<boolean> => {
   if (Platform.OS !== 'android') {
-    throw new Error('Sistem cetak Bluetooth Native hanya tersedia di Android.');
+    throw new Error('Sistem cetak Bluetooth Direct Socket hanya mendukung sistem operasi Android.');
   }
 
-  if (!BluetoothPrinterModule) {
-    throw new Error(
-      'Modul Bluetooth native (BluetoothPrinterModule) tidak ditemukan. '
-      + 'Pastikan Anda menggunakan APK build terbaru, bukan Expo Go.'
-    );
-  }
-
-  if (!BluetoothPrinterModule.printRawBytes) {
-    throw new Error('Method printRawBytes tidak tersedia. Rebuild APK diperlukan.');
+  if (!BluetoothPrinterModule || !BluetoothPrinterModule.printRawBytes) {
+    throw new Error('Modul koneksi printer tidak siap. Silakan nyalakan ulang aplikasi.');
   }
 
   const hasPerms = await requestBluetoothPermissions();
   if (!hasPerms) {
-    throw new Error('Izin Bluetooth ditolak. Izinkan akses Bluetooth di pengaturan HP.');
+    throw new Error('Izin Bluetooth belum diberikan. Aktifkan izin Bluetooth pada Pengaturan HP.');
   }
 
   try {
-    console.log('[BT] Mengirim print ke MAC:', macAddress, '| Data length:', base64Data.length);
     await BluetoothPrinterModule.printRawBytes(macAddress, base64Data);
-    console.log('[BT] Direct Native Print berhasil!');
     return true;
   } catch (error: any) {
-    console.error('[BT] printRawBytes error - code:', error?.code, '| message:', error?.message);
-    const code = error?.code || '';
     const message = error?.message || '';
 
-    if (code === 'BLUETOOTH_DISABLED' || message.includes('Bluetooth belum dinyalakan')) {
-      throw new Error('Bluetooth belum dinyalakan. Silakan aktifkan Bluetooth HP Anda.');
+    if (message.includes('Bluetooth belum dinyalakan')) {
+      throw new Error('Bluetooth HP dalam keadaan mati. Silakan aktifkan Bluetooth terlebih dahulu.');
     }
-    if (code === 'PRINTER_NOT_PAIRED' || message.includes('tidak ditemukan pada daftar')) {
-      throw new Error(
-        'Printer belum di-pair dengan HP ini.\n\n'
-        + 'Cara pairing:\n1. Buka Pengaturan Bluetooth HP\n2. Nyalakan printer\n3. Tap nama printer untuk pair\n4. Kembali ke aplikasi dan pilih printer di Pengaturan.'
-      );
-    }
-    if (code === 'INVALID_MAC' || message.includes('tidak valid')) {
-      throw new Error('Alamat MAC printer tidak valid. Silakan pilih ulang printer di menu Pengaturan Printer.');
+    if (message.includes('tidak ditemukan')) {
+      throw new Error('Printer tidak dapat ditemukan. Pastikan printer dalam keadaan menyala dan dekat dengan HP.');
     }
 
-    throw new Error(message || 'Gagal terhubung langsung ke printer thermal.');
+    throw new Error(message || 'Gagal terhubung ke printer thermal.');
   }
 };
 
 /**
- * Memanggil pencetakan via aplikasi driver RawBT (Intent Native atau Scheme)
- */
-export const printViaRawBT = async (base64Data: string): Promise<boolean> => {
-  if (Platform.OS === 'android' && BluetoothPrinterModule?.printViaRawBT) {
-    try {
-      await BluetoothPrinterModule.printViaRawBT(base64Data);
-      return true;
-    } catch (e: any) {
-      console.warn('[BT] printViaRawBT error:', e);
-      throw new Error(e?.message || 'Aplikasi RawBT tidak dapat dibuka. Pastikan RawBT terinstall.');
-    }
-  }
-
-  try {
-    const rawBtUrl = `rawbt:base64,${base64Data}`;
-    await Linking.openURL(rawBtUrl);
-    return true;
-  } catch (err) {
-    throw new Error('Aplikasi RawBT tidak terpasang di HP ini. Silakan install dari Play Store.');
-  }
-};
-
-/**
- * FITUR REKOMENDASI: Tes Cetak Struk (Test Print)
+ * Tes Cetak Struk (Test Print)
  */
 export const testPrintThermal = async (targetMacAddress?: string): Promise<boolean> => {
   const storeSettings = useSettingsStore.getState();
   const mac = targetMacAddress || storeSettings.printerMacAddress;
-  const printMode = storeSettings.printMode || 'native';
-
-  const rawEscPosString = buildTestPrintBytes(storeSettings.businessName);
-  const bytes = stringToBytes(rawEscPosString);
-  const base64Data = bytesToBase64(bytes);
-
-  if (printMode === 'rawbt') {
-    try {
-      await printViaRawBT(base64Data);
-      Alert.alert('Sukses Test Print', 'Struk tes berhasil dikirim ke aplikasi RawBT!');
-      return true;
-    } catch (e: any) {
-      Alert.alert('Gagal Test Print RawBT', e.message);
-      return false;
-    }
-  }
 
   if (!mac) {
     Alert.alert(
@@ -259,31 +159,21 @@ export const testPrintThermal = async (targetMacAddress?: string): Promise<boole
   }
 
   try {
+    const rawEscPosString = buildTestPrintBytes(storeSettings.businessName);
+    const bytes = stringToBytes(rawEscPosString);
+    const base64Data = bytesToBase64(bytes);
+
     await sendToNativePrinter(mac, base64Data);
-    Alert.alert('Sukses Test Print', 'Printer berhasil terhubung dan mencetak struk tes!');
+    Alert.alert('Tes Cetak Berhasil', 'Printer thermal berhasil terhubung dan mencetak struk percobaan!');
     return true;
   } catch (e: any) {
-    Alert.alert(
-      'Gagal Direct Test Print',
-      `${e.message}\n\nIngin mencoba mencetak via RawBT?`,
-      [
-        { text: 'Batal', style: 'cancel' },
-        {
-          text: 'Gunakan RawBT',
-          onPress: () => {
-            printViaRawBT(base64Data).catch((err) => {
-              Alert.alert('Error RawBT', err.message);
-            });
-          },
-        },
-      ]
-    );
+    Alert.alert('Gagal Cetak', e.message || 'Printer tidak merespon koneksi.');
     return false;
   }
 };
 
 /**
- * Mengirim berkas Struk ESC/POS ke fitur "Share via Bluetooth" Bawaan HP Android (Fallback)
+ * Fallback Berkas Struk ke Berbagi Bluetooth HP
  */
 export const shareToBluetoothPrinter = async (data: ReceiptData) => {
   try {
@@ -298,16 +188,16 @@ export const shareToBluetoothPrinter = async (data: ReceiptData) => {
     if (await Sharing.isAvailableAsync()) {
       await Sharing.shareAsync(fileUri, {
         mimeType: 'text/plain',
-        dialogTitle: 'Kirim Ke Printer Bluetooth (Fitur Bawaan HP)',
+        dialogTitle: 'Kirim Struk Ke Printer Bluetooth',
       });
     }
   } catch (error) {
-    console.error('Share to Bluetooth printer error:', error);
+    console.error('Share printer error:', error);
   }
 };
 
 /**
- * Mengirim berkas Slip Gaji ESC/POS ke fitur "Share via Bluetooth" Bawaan HP Android (Fallback)
+ * Fallback Berkas Slip Gaji ke Berbagi Bluetooth HP
  */
 export const shareSlipGajiToBluetoothPrinter = async (data: SlipGajiData) => {
   try {
@@ -322,16 +212,16 @@ export const shareSlipGajiToBluetoothPrinter = async (data: SlipGajiData) => {
     if (await Sharing.isAvailableAsync()) {
       await Sharing.shareAsync(fileUri, {
         mimeType: 'text/plain',
-        dialogTitle: 'Kirim Ke Printer Bluetooth (Fitur Bawaan HP)',
+        dialogTitle: 'Kirim Slip Gaji Ke Printer Bluetooth',
       });
     }
   } catch (error) {
-    console.error('Share to Bluetooth printer error:', error);
+    console.error('Share slip gaji error:', error);
   }
 };
 
 /**
- * Mencetak Struk Transaksi (Mendukung Direct Bluetooth Native & Opsi RawBT)
+ * Mencetak Struk Transaksi Secara Murni Direct Native via Bluetooth
  */
 export const printReceiptThermal = async (data: ReceiptData, overrideMacAddress?: string) => {
   const rawEscPosString = buildReceiptBytes(data);
@@ -339,19 +229,6 @@ export const printReceiptThermal = async (data: ReceiptData, overrideMacAddress?
   const base64Data = bytesToBase64(bytes);
 
   const storeSettings = useSettingsStore.getState();
-  const printMode = storeSettings.printMode || 'native';
-
-  // Mode RawBT jika dipilih oleh pengguna
-  if (printMode === 'rawbt') {
-    try {
-      await printViaRawBT(base64Data);
-      return;
-    } catch (e: any) {
-      Alert.alert('Gagal Cetak via RawBT', e.message);
-      return;
-    }
-  }
-
   let targetMac = overrideMacAddress || storeSettings.printerMacAddress;
 
   if (!targetMac && Platform.OS === 'android') {
@@ -371,42 +248,17 @@ export const printReceiptThermal = async (data: ReceiptData, overrideMacAddress?
     return;
   }
 
-  // Mode Direct Bluetooth Native (5 Strategi Fallback)
   if (Platform.OS === 'android' && BluetoothPrinterModule?.printRawBytes) {
     try {
       await sendToNativePrinter(targetMac, base64Data);
       return;
     } catch (nativeErr: any) {
-      console.log('Native Bluetooth Socket error:', nativeErr);
-      if (
-        nativeErr.message.includes('Bluetooth belum dinyalakan') ||
-        nativeErr.message.includes('belum di-pair')
-      ) {
-        Alert.alert('Gagal Cetak', nativeErr.message);
-        return;
-      }
-
-      // Tawarkan fallback RawBT jika direct socket tidak kompatibel dengan firmware printer
-      Alert.alert(
-        'Koneksi Direct Printer Gagal',
-        `${nativeErr.message}\n\nApakah Anda ingin mencoba mencetak via aplikasi RawBT?`,
-        [
-          { text: 'Batal', style: 'cancel' },
-          {
-            text: 'Cetak via RawBT',
-            onPress: () => {
-              printViaRawBT(base64Data).catch((err) => {
-                Alert.alert('Error RawBT', err.message);
-              });
-            },
-          },
-        ]
-      );
+      Alert.alert('Gagal Cetak Struk', nativeErr.message || 'Printer thermal tidak merespon.');
       return;
     }
   }
 
-  // Fallback System Print
+  // Fallback Cetak Dokumen Sistem
   try {
     const html = buildReceiptHtml(data);
     await Print.printAsync({
@@ -419,7 +271,7 @@ export const printReceiptThermal = async (data: ReceiptData, overrideMacAddress?
 };
 
 /**
- * Mencetak Slip Gaji (Mendukung Direct Bluetooth Native & Opsi RawBT)
+ * Mencetak Slip Gaji Karyawan Secara Murni Direct Native via Bluetooth
  */
 export const printSlipGajiThermal = async (data: SlipGajiData, overrideMacAddress?: string) => {
   const rawEscPosString = buildSlipGajiBytes(data);
@@ -427,18 +279,6 @@ export const printSlipGajiThermal = async (data: SlipGajiData, overrideMacAddres
   const base64Data = bytesToBase64(bytes);
 
   const storeSettings = useSettingsStore.getState();
-  const printMode = storeSettings.printMode || 'native';
-
-  if (printMode === 'rawbt') {
-    try {
-      await printViaRawBT(base64Data);
-      return;
-    } catch (e: any) {
-      Alert.alert('Gagal Cetak via RawBT', e.message);
-      return;
-    }
-  }
-
   let targetMac = overrideMacAddress || storeSettings.printerMacAddress;
 
   if (!targetMac && Platform.OS === 'android') {
@@ -463,30 +303,7 @@ export const printSlipGajiThermal = async (data: SlipGajiData, overrideMacAddres
       await sendToNativePrinter(targetMac, base64Data);
       return;
     } catch (nativeErr: any) {
-      console.log('Native Bluetooth Socket error:', nativeErr);
-      if (
-        nativeErr.message.includes('Bluetooth belum dinyalakan') ||
-        nativeErr.message.includes('belum di-pair')
-      ) {
-        Alert.alert('Gagal Cetak', nativeErr.message);
-        return;
-      }
-
-      Alert.alert(
-        'Koneksi Direct Printer Gagal',
-        `${nativeErr.message}\n\nApakah Anda ingin mencoba mencetak via aplikasi RawBT?`,
-        [
-          { text: 'Batal', style: 'cancel' },
-          {
-            text: 'Cetak via RawBT',
-            onPress: () => {
-              printViaRawBT(base64Data).catch((err) => {
-                Alert.alert('Error RawBT', err.message);
-              });
-            },
-          },
-        ]
-      );
+      Alert.alert('Gagal Cetak Slip Gaji', nativeErr.message || 'Printer thermal tidak merespon.');
       return;
     }
   }

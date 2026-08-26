@@ -11,7 +11,6 @@ interface SettingsState {
   printerMacAddress: string;
   printerName: string;
   payrollPeriod: 'harian' | 'mingguan' | 'bulanan';
-  printMode: 'native' | 'rawbt';
   isLoading: boolean;
 
   loadSettings: () => Promise<void>;
@@ -27,7 +26,6 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   printerMacAddress: '',
   printerName: '',
   payrollPeriod: 'mingguan',
-  printMode: 'native',
   isLoading: false,
 
   loadSettings: async () => {
@@ -47,7 +45,6 @@ export const useSettingsStore = create<SettingsState>((set) => ({
         printerMacAddress: config['printer_mac_address'] || '',
         printerName: config['printer_name'] || '',
         payrollPeriod: (config['payroll_period'] as any) || 'mingguan',
-        printMode: (config['print_mode'] as any) || 'native',
       });
     } catch (e) {
       console.error('Failed to load settings:', e);
@@ -73,7 +70,6 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       if (key === 'printer_mac_address') stateUpdate.printerMacAddress = value;
       if (key === 'printer_name') stateUpdate.printerName = value;
       if (key === 'payroll_period') stateUpdate.payrollPeriod = value as any;
-      if (key === 'print_mode') stateUpdate.printMode = value as any;
 
       set(stateUpdate);
     } catch (e) {
@@ -107,7 +103,6 @@ export const useSettingsStore = create<SettingsState>((set) => ({
         printerMacAddress: config['printer_mac_address'] || '',
         printerName: config['printer_name'] || '',
         payrollPeriod: (config['payroll_period'] as any) || 'mingguan',
-        printMode: (config['print_mode'] as any) || 'native',
       });
     } catch (e) {
       console.error('Failed to update settings batch:', e);

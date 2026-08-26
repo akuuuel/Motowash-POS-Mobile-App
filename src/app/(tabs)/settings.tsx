@@ -631,60 +631,6 @@ function PrinterSettingsModal({ visible, onClose }: { visible: boolean; onClose:
             </View>
 
             <ScrollView style={styles.modalBody} contentContainerStyle={{ paddingBottom: 220 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
-              {/* PILIHAN METODE CETAK */}
-              <ThemedText style={styles.inputLabel}>Metode Cetak Thermal</ThemedText>
-              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
-                <TouchableOpacity
-                  style={{
-                    flex: 1,
-                    paddingVertical: 10,
-                    paddingHorizontal: 8,
-                    borderRadius: 10,
-                    borderWidth: 1.5,
-                    borderColor: store.printMode === 'native' ? '#2563EB' : '#CBD5E1',
-                    backgroundColor: store.printMode === 'native' ? '#EFF6FF' : '#FFFFFF',
-                    alignItems: 'center',
-                  }}
-                  onPress={async () => {
-                    await store.updateSetting('print_mode', 'native');
-                    Alert.alert('Mode Cetak', 'Mode cetak diubah ke Direct Native (Tanpa Aplikasi Lain).');
-                  }}
-                >
-                  <Ionicons name="bluetooth" size={20} color={store.printMode === 'native' ? '#2563EB' : '#64748B'} />
-                  <ThemedText style={{ fontSize: 12, fontWeight: '800', color: store.printMode === 'native' ? '#2563EB' : '#1E293B', marginTop: 4 }}>
-                    Direct Native
-                  </ThemedText>
-                  <ThemedText style={{ fontSize: 10, color: '#64748B', textAlign: 'center', marginTop: 2 }}>
-                    Murni Bluetooth HP
-                  </ThemedText>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={{
-                    flex: 1,
-                    paddingVertical: 10,
-                    paddingHorizontal: 8,
-                    borderRadius: 10,
-                    borderWidth: 1.5,
-                    borderColor: store.printMode === 'rawbt' ? '#2563EB' : '#CBD5E1',
-                    backgroundColor: store.printMode === 'rawbt' ? '#EFF6FF' : '#FFFFFF',
-                    alignItems: 'center',
-                  }}
-                  onPress={async () => {
-                    await store.updateSetting('print_mode', 'rawbt');
-                    Alert.alert('Mode Cetak', 'Mode cetak diubah ke Aplikasi RawBT Driver.');
-                  }}
-                >
-                  <Ionicons name="apps" size={20} color={store.printMode === 'rawbt' ? '#2563EB' : '#64748B'} />
-                  <ThemedText style={{ fontSize: 12, fontWeight: '800', color: store.printMode === 'rawbt' ? '#2563EB' : '#1E293B', marginTop: 4 }}>
-                    RawBT Driver
-                  </ThemedText>
-                  <ThemedText style={{ fontSize: 10, color: '#64748B', textAlign: 'center', marginTop: 2 }}>
-                    Via Aplikasi RawBT
-                  </ThemedText>
-                </TouchableOpacity>
-              </View>
-
               {/* STATUS PRINTER TERPESAN / TERPILIH */}
               <ThemedText style={styles.inputLabel}>Status Printer Terpilih</ThemedText>
               <View style={{
