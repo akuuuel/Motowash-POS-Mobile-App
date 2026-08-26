@@ -119,7 +119,7 @@ export const bytesToBase64 = (bytes: Uint8Array): string => {
 };
 
 /**
- * Membangun format ESC/POS untuk Test Print Printer
+ * Membangun format ESC/POS untuk Test Print Printer (kertas 58 mm)
  */
 export const buildTestPrintBytes = (businessName: string): string => {
   const line = '--------------------------------\n';
