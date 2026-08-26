@@ -157,14 +157,13 @@ function NewTransactionView() {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView
           style={styles.formContainer}
-          contentContainerStyle={[styles.formContent, { paddingBottom: 60 }]}
+          contentContainerStyle={styles.formContent}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={true}
-          bounces={true}
+          nestedScrollEnabled={true}
         >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-            <View style={{ flex: 1 }}>
+          <View>
       {/* A. Plat Nomor */}
       <ThemedText style={styles.inputLabel}>Plat Nomor Motor</ThemedText>
       <TextInput
@@ -293,8 +292,7 @@ function NewTransactionView() {
           </>
         )}
       </TouchableOpacity>
-            </View>
-          </TouchableWithoutFeedback>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -719,7 +717,7 @@ const styles = StyleSheet.create({
   },
   formContent: {
     padding: 16,
-    paddingBottom: 220,
+    paddingBottom: 140,
   },
   inputLabel: {
     fontSize: 13,

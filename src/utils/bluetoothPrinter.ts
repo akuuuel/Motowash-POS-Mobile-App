@@ -17,6 +17,13 @@ import {
 
 const { BluetoothPrinterModule } = NativeModules;
 
+// Log status modul saat startup untuk memudahkan debugging
+if (__DEV__) {
+  console.log('[BT] BluetoothPrinterModule tersedia:', !!BluetoothPrinterModule);
+  console.log('[BT] printRawBytes tersedia:', !!BluetoothPrinterModule?.printRawBytes);
+  console.log('[BT] getPairedDevices tersedia:', !!BluetoothPrinterModule?.getPairedDevices);
+}
+
 export interface BluetoothDeviceInfo {
   name: string;
   address: string;
@@ -33,36 +40,42 @@ export const requestBluetoothPermissions = async (): Promise<boolean> => {
   if (Platform.OS !== 'android') return true;
 
   try {
+    // Android 12+ (API 31+) memerlukan izin BLUETOOTH_CONNECT dan BLUETOOTH_SCAN
     if (Platform.Version >= 31) {
+      console.log('[BT] Meminta izin Bluetooth untuk Android 12+...');
       const granted = await PermissionsAndroid.requestMultiple([
         PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
         PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
       ]);
 
-      const isConnectGranted =
-        granted[PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT] === PermissionsAndroid.RESULTS.GRANTED;
+      const connectStatus = granted[PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT];
+      const scanStatus = granted[PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN];
+      console.log('[BT] BLUETOOTH_CONNECT:', connectStatus, '| BLUETOOTH_SCAN:', scanStatus);
 
+      const isConnectGranted = connectStatus === PermissionsAndroid.RESULTS.GRANTED;
       if (!isConnectGranted) {
         Alert.alert(
-          'Izin Bluetooth Ditolak',
-          'Izin Bluetooth diperlukan untuk mencari dan menghubungkan printer. Silakan izinkan di Pengaturan HP Anda.'
+          'Izin Bluetooth Diperlukan',
+          'Izin BLUETOOTH_CONNECT harus diizinkan agar aplikasi dapat terhubung ke printer thermal. Buka Pengaturan > Aplikasi > Koko Motowash > Izin > Bluetooth.',
+          [
+            { text: 'Batal', style: 'cancel' },
+            { text: 'Buka Pengaturan', onPress: () => Linking.openSettings() },
+          ]
         );
         return false;
       }
       return true;
     } else {
-      // Android 11 kebawah memerlukan ACCESS_FINE_LOCATION untuk pemindaian BT
+      // Android 11 ke bawah - izin lokasi diperlukan untuk pairing BT (scan)
+      console.log('[BT] Android < 12, meminta ACCESS_FINE_LOCATION...');
       const granted = await PermissionsAndroid.request(
         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
       );
-      if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-        // Lokasi opsional untuk paired device, abaikan bila ditolak namun return true jika Bluetooth aktif
-        return true;
-      }
-      return true;
+      console.log('[BT] ACCESS_FINE_LOCATION:', granted);
+      return true; // Bluetooth connect tidak memerlukan izin lokasi secara ketat
     }
   } catch (err) {
-    console.warn('Bluetooth permission request error:', err);
+    console.warn('[BT] Permission request error:', err);
     return false;
   }
 };
@@ -71,17 +84,33 @@ export const requestBluetoothPermissions = async (): Promise<boolean> => {
  * Mendapatkan Daftar Device Bluetooth Thermal yang Sudah Di-Pairing di HP
  */
 export const getNativePairedDevices = async (): Promise<BluetoothDeviceInfo[]> => {
-  if (Platform.OS === 'android' && BluetoothPrinterModule?.getPairedDevices) {
-    const hasPerms = await requestBluetoothPermissions();
-    if (!hasPerms) return [];
+  if (Platform.OS !== 'android') return [];
 
-    try {
-      const devices = await BluetoothPrinterModule.getPairedDevices();
-      return devices || [];
-    } catch (e: any) {
-      console.log('Error fetching native paired devices:', e);
-      Alert.alert('Info Bluetooth', e?.message || 'Gagal mengambil daftar perangkat Bluetooth.');
-    }
+  if (!BluetoothPrinterModule) {
+    console.warn('[BT] BluetoothPrinterModule tidak ditemukan. Pastikan APK sudah di-rebuild setelah penambahan modul native.');
+    Alert.alert(
+      'Modul Printer Tidak Ditemukan',
+      'Modul Bluetooth native tidak tersedia. Pastikan Anda menggunakan APK build terbaru (bukan Expo Go).'
+    );
+    return [];
+  }
+
+  if (!BluetoothPrinterModule.getPairedDevices) {
+    console.warn('[BT] Method getPairedDevices tidak tersedia di modul.');
+    return [];
+  }
+
+  const hasPerms = await requestBluetoothPermissions();
+  if (!hasPerms) return [];
+
+  try {
+    console.log('[BT] Memanggil getPairedDevices...');
+    const devices = await BluetoothPrinterModule.getPairedDevices();
+    console.log('[BT] Perangkat paired ditemukan:', devices?.length ?? 0);
+    return devices || [];
+  } catch (e: any) {
+    console.error('[BT] getPairedDevices error:', e);
+    Alert.alert('Gagal Ambil Daftar Printer', e?.message || 'Pastikan Bluetooth aktif dan printer sudah di-pair di Pengaturan Bluetooth HP.');
   }
   return [];
 };
@@ -129,21 +158,34 @@ export const openRawBTPlayStore = () => {
  * Fungsi Utama Pengiriman Byte Raw ke Native Bluetooth Module dengan Penanganan Error Ramah Pengguna
  */
 const sendToNativePrinter = async (macAddress: string, base64Data: string): Promise<boolean> => {
-  if (Platform.OS !== 'android' || !BluetoothPrinterModule?.printRawBytes) {
+  if (Platform.OS !== 'android') {
     throw new Error('Sistem cetak Bluetooth Native hanya tersedia di Android.');
+  }
+
+  if (!BluetoothPrinterModule) {
+    throw new Error(
+      'Modul Bluetooth native (BluetoothPrinterModule) tidak ditemukan. '
+      + 'Pastikan Anda menggunakan APK build terbaru, bukan Expo Go. '
+      + 'Jika masalah berlanjut, hubungi developer.'
+    );
+  }
+
+  if (!BluetoothPrinterModule.printRawBytes) {
+    throw new Error('Method printRawBytes tidak tersedia. Rebuild APK diperlukan.');
   }
 
   const hasPerms = await requestBluetoothPermissions();
   if (!hasPerms) {
-    throw new Error('Izin Bluetooth diperlukan untuk menghubungkan printer.');
+    throw new Error('Izin Bluetooth ditolak. Izinkan akses Bluetooth di pengaturan HP.');
   }
 
   try {
+    console.log('[BT] Mengirim print ke MAC:', macAddress, '| Data length:', base64Data.length);
     await BluetoothPrinterModule.printRawBytes(macAddress, base64Data);
+    console.log('[BT] Print berhasil!');
     return true;
   } catch (error: any) {
-    console.error('Native printer socket error:', error);
-    // Terjemahkan pesan error teknis menjadi pesan ramah pengguna Indonesia
+    console.error('[BT] printRawBytes error - code:', error?.code, '| message:', error?.message);
     const code = error?.code || '';
     const message = error?.message || '';
 
@@ -151,13 +193,16 @@ const sendToNativePrinter = async (macAddress: string, base64Data: string): Prom
       throw new Error('Bluetooth belum dinyalakan. Silakan aktifkan Bluetooth HP Anda.');
     }
     if (code === 'PRINTER_NOT_PAIRED' || message.includes('tidak ditemukan pada daftar')) {
-      throw new Error('Printer belum dipasangkan dengan HP ini. Silakan pair printer di Pengaturan Bluetooth HP.');
+      throw new Error(
+        'Printer belum di-pair dengan HP ini.\n\n'
+        + 'Cara pairing:\n1. Buka Pengaturan Bluetooth HP\n2. Nyalakan printer\n3. Tap nama printer untuk pair\n4. Kembali ke aplikasi dan pilih printer di Pengaturan.'
+      );
     }
     if (code === 'INVALID_MAC' || message.includes('tidak valid')) {
-      throw new Error('Alamat MAC printer tidak valid. Silakan pilih printer kembali di Pengaturan.');
+      throw new Error('Alamat MAC printer tidak valid. Silakan pilih ulang printer di menu Pengaturan Printer.');
     }
     if (code === 'CONNECTION_FAILED' || message.includes('Tidak dapat terhubung')) {
-      throw new Error('Tidak dapat terhubung ke printer. Pastikan printer menyala dan berada dalam jangkauan Bluetooth.');
+      throw new Error('Tidak dapat terhubung ke printer. Pastikan: printer menyala, berada dalam jangkauan BT, dan belum terhubung ke perangkat lain.');
     }
 
     throw new Error(message || 'Gagal terhubung ke printer thermal.');
