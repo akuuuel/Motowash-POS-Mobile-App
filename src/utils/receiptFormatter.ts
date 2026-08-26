@@ -60,14 +60,11 @@ export interface SlipGajiData {
 }
 
 /**
- * Format mata uang Rupiah
+ * Format mata uang Rupiah (Murni ASCII tanpa non-breaking space 0xA0 yang merusak printer thermal)
  */
-export const formatRp = (num: number): string => {
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0,
-  }).format(num);
+export const formatRp = (num: number | string | null | undefined): string => {
+  const n = typeof num === 'number' ? num : Number(num) || 0;
+  return 'Rp ' + Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
 };
 
 /**
@@ -189,48 +186,51 @@ export const buildReceiptBytes = (data: ReceiptData): string => {
 
   // 2. Judul Usaha (Huruf Besar & Tebal)
   builder += ESC_POS_CODES.TEXT_LARGE + ESC_POS_CODES.TEXT_BOLD;
-  builder += `${data.businessName.toUpperCase()}\n`;
+  builder += `${(data.businessName || 'KOKO MOTOWASH').toUpperCase()}\n`;
 
   // Alamat & Telp
   builder += ESC_POS_CODES.TEXT_REGULAR;
-  builder += `${data.businessAddress}\n`;
-  builder += `Telp: ${data.businessPhone}\n`;
+  builder += `${data.businessAddress || ''}\n`;
+  builder += `Telp: ${data.businessPhone || ''}\n`;
   builder += line;
 
   // 3. Info Transaksi (Rata Kiri)
   builder += ESC_POS_CODES.ALIGN_LEFT;
-  builder += `No  : ${data.transactionNumber}\n`;
+  builder += `No  : ${data.transactionNumber || ''}\n`;
   builder += `Tgl : ${formattedDate}\n`;
   builder += `Ksr : Kasir Utama\n`;
   builder += line;
 
   // 4. Detail Item Cuci (Plat Motor & Jenis Kategori)
   builder += ESC_POS_CODES.TEXT_BOLD;
-  builder += `PLAT : ${data.plateNumber}\n`;
+  builder += `PLAT : ${data.plateNumber || ''}\n`;
   builder += ESC_POS_CODES.TEXT_REGULAR;
-  builder += `CUCI MOTOR - ${data.vehicleCategoryName.toUpperCase()}\n`;
+  builder += `CUCI MOTOR - ${(data.vehicleCategoryName || '').toUpperCase()}\n`;
 
   // Detail Cuci oleh Karyawan
-  builder += `Pencuci: ${data.employeeName}\n`;
+  builder += `Pencuci: ${data.employeeName || ''}\n`;
 
   // Rincian Harga
   builder += line;
-  builder += ESC_POS_CODES.ALIGN_RIGHT;
+  builder += ESC_POS_CODES.ALIGN_LEFT;
 
-  if (data.finalPrice !== data.originalPrice) {
-    builder += `Harga Normal: ${formatRp(data.originalPrice)}\n`;
-    builder += `Diskon/Adj  : -${formatRp(data.originalPrice - data.finalPrice)}\n`;
+  const origPrice = Number(data.originalPrice) || 0;
+  const finPrice = Number(data.finalPrice) || 0;
+
+  if (finPrice !== origPrice && origPrice > 0) {
+    builder += `Harga Normal : ${formatRp(origPrice)}\n`;
+    builder += `Diskon/Adj   : -${formatRp(origPrice - finPrice)}\n`;
   }
 
   builder += ESC_POS_CODES.TEXT_BOLD;
-  builder += `TOTAL CASH : ${formatRp(data.finalPrice)}\n`;
+  builder += `TOTAL CASH   : ${formatRp(finPrice)}\n`;
   builder += ESC_POS_CODES.TEXT_REGULAR;
-  builder += `Metode Bayar: ${data.paymentMethod}\n`;
+  builder += `Metode Bayar : ${data.paymentMethod || 'Tunai'}\n`;
   builder += line;
 
   // 5. Pesan Terima Kasih (Center)
   builder += ESC_POS_CODES.ALIGN_CENTER;
-  builder += `${data.thankYouMessage}\n`;
+  builder += `${data.thankYouMessage || 'Terima kasih atas kunjungan Anda!'}\n`;
   builder += '\n';
 
   builder += ESC_POS_CODES.PAPER_FEED_4;
@@ -249,11 +249,11 @@ export const buildSlipGajiBytes = (data: SlipGajiData): string => {
   builder += ESC_POS_CODES.ALIGN_CENTER;
 
   builder += ESC_POS_CODES.TEXT_LARGE + ESC_POS_CODES.TEXT_BOLD;
-  builder += `${data.businessName.toUpperCase()}\n`;
+  builder += `${(data.businessName || 'KOKO MOTOWASH').toUpperCase()}\n`;
 
   builder += ESC_POS_CODES.TEXT_REGULAR;
-  builder += `${data.businessAddress}\n`;
-  builder += `Telp: ${data.businessPhone}\n`;
+  builder += `${data.businessAddress || ''}\n`;
+  builder += `Telp: ${data.businessPhone || ''}\n`;
   builder += line;
 
   builder += ESC_POS_CODES.TEXT_BOLD;
@@ -262,10 +262,10 @@ export const buildSlipGajiBytes = (data: SlipGajiData): string => {
   builder += line;
 
   builder += ESC_POS_CODES.ALIGN_LEFT;
-  builder += `No Slip : ${data.payoutNumber}\n`;
-  builder += `Karyawan: ${data.employeeName}\n`;
-  builder += `Periode : ${data.startDate} - ${data.endDate}\n`;
-  builder += `Tgl Byr : ${data.paidAt}\n`;
+  builder += `No Slip : ${data.payoutNumber || ''}\n`;
+  builder += `Karyawan: ${data.employeeName || ''}\n`;
+  builder += `Periode : ${data.startDate || ''} - ${data.endDate || ''}\n`;
+  builder += `Tgl Byr : ${data.paidAt || ''}\n`;
   builder += line;
 
   if (data.categoryBreakdown && data.categoryBreakdown.length > 0) {
@@ -279,21 +279,21 @@ export const buildSlipGajiBytes = (data: SlipGajiData): string => {
     builder += line;
   }
 
-  builder += ESC_POS_CODES.ALIGN_RIGHT;
-  builder += `Total Motor Dicuci : ${data.totalWashCount} Motor\n`;
-  builder += `Total Komisi       : ${formatRp(data.totalCommission)}\n`;
-  if (data.bonus > 0) {
-    builder += `Bonus Tambahan     : +${formatRp(data.bonus)}\n`;
+  builder += ESC_POS_CODES.ALIGN_LEFT;
+  builder += `Total Motor  : ${data.totalWashCount || 0} Motor\n`;
+  builder += `Total Komisi : ${formatRp(data.totalCommission || 0)}\n`;
+  if ((data.bonus || 0) > 0) {
+    builder += `Bonus        : +${formatRp(data.bonus)}\n`;
   }
-  if (data.deduction > 0) {
-    builder += `Potongan           : -${formatRp(data.deduction)}\n`;
+  if ((data.deduction || 0) > 0) {
+    builder += `Potongan     : -${formatRp(data.deduction)}\n`;
   }
 
   builder += line;
   builder += ESC_POS_CODES.TEXT_BOLD;
-  builder += `TOTAL DITERIMA : ${formatRp(data.netSalary)}\n`;
+  builder += `TOTAL DITERIMA : ${formatRp(data.netSalary || 0)}\n`;
   builder += ESC_POS_CODES.TEXT_REGULAR;
-  builder += `STATUS GAJI    : ${data.status.toUpperCase()}\n`;
+  builder += `STATUS GAJI    : ${(data.status || '').toUpperCase()}\n`;
   builder += line;
 
   builder += ESC_POS_CODES.ALIGN_CENTER;
