@@ -157,6 +157,9 @@ export const openRawBTPlayStore = () => {
 /**
  * Fungsi Utama Pengiriman Byte Raw ke Native Bluetooth Module dengan Penanganan Error Ramah Pengguna
  */
+/**
+ * Fungsi Utama Pengiriman Byte Raw ke Native Bluetooth Module
+ */
 const sendToNativePrinter = async (macAddress: string, base64Data: string): Promise<boolean> => {
   if (Platform.OS !== 'android') {
     throw new Error('Sistem cetak Bluetooth Native hanya tersedia di Android.');
@@ -165,8 +168,7 @@ const sendToNativePrinter = async (macAddress: string, base64Data: string): Prom
   if (!BluetoothPrinterModule) {
     throw new Error(
       'Modul Bluetooth native (BluetoothPrinterModule) tidak ditemukan. '
-      + 'Pastikan Anda menggunakan APK build terbaru, bukan Expo Go. '
-      + 'Jika masalah berlanjut, hubungi developer.'
+      + 'Pastikan Anda menggunakan APK build terbaru, bukan Expo Go.'
     );
   }
 
@@ -182,7 +184,7 @@ const sendToNativePrinter = async (macAddress: string, base64Data: string): Prom
   try {
     console.log('[BT] Mengirim print ke MAC:', macAddress, '| Data length:', base64Data.length);
     await BluetoothPrinterModule.printRawBytes(macAddress, base64Data);
-    console.log('[BT] Print berhasil!');
+    console.log('[BT] Direct Native Print berhasil!');
     return true;
   } catch (error: any) {
     console.error('[BT] printRawBytes error - code:', error?.code, '| message:', error?.message);
@@ -201,21 +203,56 @@ const sendToNativePrinter = async (macAddress: string, base64Data: string): Prom
     if (code === 'INVALID_MAC' || message.includes('tidak valid')) {
       throw new Error('Alamat MAC printer tidak valid. Silakan pilih ulang printer di menu Pengaturan Printer.');
     }
-    if (code === 'CONNECTION_FAILED' || message.includes('Tidak dapat terhubung')) {
-      throw new Error('Tidak dapat terhubung ke printer. Pastikan: printer menyala, berada dalam jangkauan BT, dan belum terhubung ke perangkat lain.');
-    }
 
-    throw new Error(message || 'Gagal terhubung ke printer thermal.');
+    throw new Error(message || 'Gagal terhubung langsung ke printer thermal.');
+  }
+};
+
+/**
+ * Memanggil pencetakan via aplikasi driver RawBT (Intent Native atau Scheme)
+ */
+export const printViaRawBT = async (base64Data: string): Promise<boolean> => {
+  if (Platform.OS === 'android' && BluetoothPrinterModule?.printViaRawBT) {
+    try {
+      await BluetoothPrinterModule.printViaRawBT(base64Data);
+      return true;
+    } catch (e: any) {
+      console.warn('[BT] printViaRawBT error:', e);
+      throw new Error(e?.message || 'Aplikasi RawBT tidak dapat dibuka. Pastikan RawBT terinstall.');
+    }
+  }
+
+  try {
+    const rawBtUrl = `rawbt:base64,${base64Data}`;
+    await Linking.openURL(rawBtUrl);
+    return true;
+  } catch (err) {
+    throw new Error('Aplikasi RawBT tidak terpasang di HP ini. Silakan install dari Play Store.');
   }
 };
 
 /**
  * FITUR REKOMENDASI: Tes Cetak Struk (Test Print)
- * Menguji apakah printer terpilih terhubung dan dapat mencetak dengan lancar.
  */
 export const testPrintThermal = async (targetMacAddress?: string): Promise<boolean> => {
   const storeSettings = useSettingsStore.getState();
   const mac = targetMacAddress || storeSettings.printerMacAddress;
+  const printMode = storeSettings.printMode || 'native';
+
+  const rawEscPosString = buildTestPrintBytes(storeSettings.businessName);
+  const bytes = stringToBytes(rawEscPosString);
+  const base64Data = bytesToBase64(bytes);
+
+  if (printMode === 'rawbt') {
+    try {
+      await printViaRawBT(base64Data);
+      Alert.alert('Sukses Test Print', 'Struk tes berhasil dikirim ke aplikasi RawBT!');
+      return true;
+    } catch (e: any) {
+      Alert.alert('Gagal Test Print RawBT', e.message);
+      return false;
+    }
+  }
 
   if (!mac) {
     Alert.alert(
@@ -226,15 +263,25 @@ export const testPrintThermal = async (targetMacAddress?: string): Promise<boole
   }
 
   try {
-    const rawEscPosString = buildTestPrintBytes(storeSettings.businessName);
-    const bytes = stringToBytes(rawEscPosString);
-    const base64Data = bytesToBase64(bytes);
-
     await sendToNativePrinter(mac, base64Data);
     Alert.alert('Sukses Test Print', 'Printer berhasil terhubung dan mencetak struk tes!');
     return true;
   } catch (e: any) {
-    Alert.alert('Gagal Test Print', e.message || 'Gagal melakukan uji coba cetak.');
+    Alert.alert(
+      'Gagal Direct Test Print',
+      `${e.message}\n\nIngin mencoba mencetak via RawBT?`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Gunakan RawBT',
+          onPress: () => {
+            printViaRawBT(base64Data).catch((err) => {
+              Alert.alert('Error RawBT', err.message);
+            });
+          },
+        },
+      ]
+    );
     return false;
   }
 };
@@ -288,86 +335,27 @@ export const shareSlipGajiToBluetoothPrinter = async (data: SlipGajiData) => {
 };
 
 /**
- * Mencetak Struk Transaksi secara 100% Murni Native via Bluetooth Socket Aplikasi Koko Motowash
+ * Mencetak Struk Transaksi (Mendukung Direct Bluetooth Native & Opsi RawBT)
  */
 export const printReceiptThermal = async (data: ReceiptData, overrideMacAddress?: string) => {
   const rawEscPosString = buildReceiptBytes(data);
   const bytes = stringToBytes(rawEscPosString);
   const base64Data = bytesToBase64(bytes);
 
-  // Ambil MAC Address printer yang tersimpan di pengaturan lokal
   const storeSettings = useSettingsStore.getState();
-  let targetMac = overrideMacAddress || storeSettings.printerMacAddress;
+  const printMode = storeSettings.printMode || 'native';
 
-  // Jika belum ada printer tersimpan di pengaturan, coba cari printer paired otomatis
-  if (!targetMac && Platform.OS === 'android') {
-    const paired = await getNativePairedDevices();
-    if (paired && paired.length > 0) {
-      const thermalDevice =
-        paired.find((d) => /print|pos|58|thermal|goojpr|mpt|rpp|vsc|panda/i.test(d.name)) || paired[0];
-      targetMac = thermalDevice.address;
-    }
-  }
-
-  // Jika tetap belum ada printer yang terpilih/ditemukan:
-  if (!targetMac) {
-    Alert.alert(
-      'Printer Belum Dipilih',
-      'Silakan pilih printer terlebih dahulu di menu Pengaturan Printer.'
-    );
-    return;
-  }
-
-  // 1. UTAMA: Cetak MURNI Native Bluetooth Socket (Direct Connection)
-  if (Platform.OS === 'android' && BluetoothPrinterModule?.printRawBytes) {
+  // Mode RawBT jika dipilih oleh pengguna
+  if (printMode === 'rawbt') {
     try {
-      await sendToNativePrinter(targetMac, base64Data);
+      await printViaRawBT(base64Data);
       return;
-    } catch (nativeErr: any) {
-      console.log('Native Bluetooth Socket error, mencoba fallback RawBT/System Print:', nativeErr);
-      // Tampilkan error ramah pengguna jika penyebab utamanya adalah Bluetooth mati / Belum pair
-      if (
-        nativeErr.message.includes('Bluetooth belum dinyalakan') ||
-        nativeErr.message.includes('belum dipasangkan') ||
-        nativeErr.message.includes('tidak valid')
-      ) {
-        Alert.alert('Gagal Cetak', nativeErr.message);
-        return;
-      }
+    } catch (e: any) {
+      Alert.alert('Gagal Cetak via RawBT', e.message);
+      return;
     }
   }
 
-  // 2. Fallback: RawBT Driver Intent (Jikalau terpasang)
-  try {
-    const rawBtUrl = `rawbt:base64,${base64Data}`;
-    await Linking.openURL(rawBtUrl);
-    return;
-  } catch (err) {
-    // RawBT tidak terpasang
-  }
-
-  // 3. Fallback: Cetak 58mm via Layanan Cetak Sistem HP (Expo Print)
-  try {
-    const html = buildReceiptHtml(data);
-    await Print.printAsync({
-      html,
-      width: 164.4, // 164.4 points = Tepat Kertas 58mm Thermal
-    });
-  } catch (e) {
-    // Fallback Terakhir: Kirim via Bluetooth Share HP Bawaan
-    await shareToBluetoothPrinter(data);
-  }
-};
-
-/**
- * Mencetak Slip Gaji secara 100% Murni Native via Bluetooth Socket Aplikasi Koko Motowash
- */
-export const printSlipGajiThermal = async (data: SlipGajiData, overrideMacAddress?: string) => {
-  const rawEscPosString = buildSlipGajiBytes(data);
-  const bytes = stringToBytes(rawEscPosString);
-  const base64Data = bytesToBase64(bytes);
-
-  const storeSettings = useSettingsStore.getState();
   let targetMac = overrideMacAddress || storeSettings.printerMacAddress;
 
   if (!targetMac && Platform.OS === 'android') {
@@ -387,7 +375,7 @@ export const printSlipGajiThermal = async (data: SlipGajiData, overrideMacAddres
     return;
   }
 
-  // 1. UTAMA: Cetak MURNI Native Bluetooth Socket (Direct Connection)
+  // Mode Direct Bluetooth Native (5 Strategi Fallback)
   if (Platform.OS === 'android' && BluetoothPrinterModule?.printRawBytes) {
     try {
       await sendToNativePrinter(targetMac, base64Data);
@@ -396,25 +384,117 @@ export const printSlipGajiThermal = async (data: SlipGajiData, overrideMacAddres
       console.log('Native Bluetooth Socket error:', nativeErr);
       if (
         nativeErr.message.includes('Bluetooth belum dinyalakan') ||
-        nativeErr.message.includes('belum dipasangkan') ||
-        nativeErr.message.includes('tidak valid')
+        nativeErr.message.includes('belum di-pair')
       ) {
         Alert.alert('Gagal Cetak', nativeErr.message);
         return;
       }
+
+      // Tawarkan fallback RawBT jika direct socket tidak kompatibel dengan firmware printer
+      Alert.alert(
+        'Koneksi Direct Printer Gagal',
+        `${nativeErr.message}\n\nApakah Anda ingin mencoba mencetak via aplikasi RawBT?`,
+        [
+          { text: 'Batal', style: 'cancel' },
+          {
+            text: 'Cetak via RawBT',
+            onPress: () => {
+              printViaRawBT(base64Data).catch((err) => {
+                Alert.alert('Error RawBT', err.message);
+              });
+            },
+          },
+        ]
+      );
+      return;
     }
   }
 
-  // 2. Fallback: RawBT Driver Intent (Jikalau terpasang)
+  // Fallback System Print
   try {
-    const rawBtUrl = `rawbt:base64,${base64Data}`;
-    await Linking.openURL(rawBtUrl);
-    return;
-  } catch (err) {
-    // RawBT tidak terpasang
+    const html = buildReceiptHtml(data);
+    await Print.printAsync({
+      html,
+      width: 164.4,
+    });
+  } catch (e) {
+    await shareToBluetoothPrinter(data);
+  }
+};
+
+/**
+ * Mencetak Slip Gaji (Mendukung Direct Bluetooth Native & Opsi RawBT)
+ */
+export const printSlipGajiThermal = async (data: SlipGajiData, overrideMacAddress?: string) => {
+  const rawEscPosString = buildSlipGajiBytes(data);
+  const bytes = stringToBytes(rawEscPosString);
+  const base64Data = bytesToBase64(bytes);
+
+  const storeSettings = useSettingsStore.getState();
+  const printMode = storeSettings.printMode || 'native';
+
+  if (printMode === 'rawbt') {
+    try {
+      await printViaRawBT(base64Data);
+      return;
+    } catch (e: any) {
+      Alert.alert('Gagal Cetak via RawBT', e.message);
+      return;
+    }
   }
 
-  // 3. Fallback: Cetak 58mm via Layanan Cetak Sistem HP
+  let targetMac = overrideMacAddress || storeSettings.printerMacAddress;
+
+  if (!targetMac && Platform.OS === 'android') {
+    const paired = await getNativePairedDevices();
+    if (paired && paired.length > 0) {
+      const thermalDevice =
+        paired.find((d) => /print|pos|58|thermal|goojpr|mpt|rpp|vsc|panda/i.test(d.name)) || paired[0];
+      targetMac = thermalDevice.address;
+    }
+  }
+
+  if (!targetMac) {
+    Alert.alert(
+      'Printer Belum Dipilih',
+      'Silakan pilih printer terlebih dahulu di menu Pengaturan Printer.'
+    );
+    return;
+  }
+
+  if (Platform.OS === 'android' && BluetoothPrinterModule?.printRawBytes) {
+    try {
+      await sendToNativePrinter(targetMac, base64Data);
+      return;
+    } catch (nativeErr: any) {
+      console.log('Native Bluetooth Socket error:', nativeErr);
+      if (
+        nativeErr.message.includes('Bluetooth belum dinyalakan') ||
+        nativeErr.message.includes('belum di-pair')
+      ) {
+        Alert.alert('Gagal Cetak', nativeErr.message);
+        return;
+      }
+
+      Alert.alert(
+        'Koneksi Direct Printer Gagal',
+        `${nativeErr.message}\n\nApakah Anda ingin mencoba mencetak via aplikasi RawBT?`,
+        [
+          { text: 'Batal', style: 'cancel' },
+          {
+            text: 'Cetak via RawBT',
+            onPress: () => {
+              printViaRawBT(base64Data).catch((err) => {
+                Alert.alert('Error RawBT', err.message);
+              });
+            },
+          },
+        ]
+      );
+      return;
+    }
+  }
+
   try {
     const html = buildSlipGajiHtml(data);
     await Print.printAsync({
