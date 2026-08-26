@@ -546,6 +546,7 @@ function PrinterSettingsModal({ visible, onClose }: { visible: boolean; onClose:
   const [pairedDevices, setPairedDevices] = useState<BluetoothDeviceInfo[]>([]);
   const [scanning, setScanning] = useState(false);
   const [testingPrint, setTestingPrint] = useState(false);
+  const [manualMac, setManualMac] = useState(store.printerMacAddress || '');
 
   useEffect(() => {
     if (visible) {
@@ -553,6 +554,7 @@ function PrinterSettingsModal({ visible, onClose }: { visible: boolean; onClose:
       setBizAddr(store.businessAddress);
       setBizPhone(store.businessPhone);
       setThankMsg(store.thankYouMessage);
+      setManualMac(store.printerMacAddress || '');
       fetchPairedDevices();
     }
   }, [visible, store]);
@@ -823,9 +825,50 @@ function PrinterSettingsModal({ visible, onClose }: { visible: boolean; onClose:
                   </View>
                 ) : (
                   <ThemedText style={{ fontSize: 11, color: '#94A3B8', fontStyle: 'italic', marginTop: 8 }}>
-                    Belum ada printer Bluetooth terikat terdeteksi. Tekan &quot;Pair Printer Baru&quot; di atas.
+                    Belum ada printer Bluetooth terikat terdeteksi secara otomatis.
                   </ThemedText>
                 )}
+
+                {/* INPUT MAC ADDRESS MANUAL */}
+                <View style={{ width: '100%', marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
+                  <ThemedText style={{ fontSize: 12, fontWeight: '700', color: '#1E293B', marginBottom: 6 }}>
+                    Input MAC Address Manual (Jika Tidak Muncul):
+                  </ThemedText>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TextInput
+                      style={[styles.textInput, { flex: 1, height: 42, fontSize: 12 }]}
+                      placeholder="Contoh: 66:22:33:44:55:66"
+                      placeholderTextColor="#94A3B8"
+                      value={manualMac}
+                      onChangeText={setManualMac}
+                      autoCapitalize="characters"
+                    />
+                    <TouchableOpacity
+                      style={{
+                        backgroundColor: '#2563EB',
+                        paddingHorizontal: 14,
+                        borderRadius: 8,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}
+                      onPress={async () => {
+                        if (!manualMac.trim()) {
+                          Alert.alert('Perhatian', 'Masukkan Alamat MAC Printer terlebih dahulu.');
+                          return;
+                        }
+                        const cleanMac = manualMac.trim().toUpperCase();
+                        await handleSelectAndSavePrinter({
+                          name: `Printer Thermal (${cleanMac})`,
+                          address: cleanMac,
+                        });
+                      }}
+                    >
+                      <ThemedText style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 12 }}>
+                        Simpan MAC
+                      </ThemedText>
+                    </TouchableOpacity>
+                  </View>
+                </View>
 
                 {store.printerMacAddress !== '' && (
                   <TouchableOpacity

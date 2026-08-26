@@ -40,23 +40,21 @@ export const requestBluetoothPermissions = async (): Promise<boolean> => {
   if (Platform.OS !== 'android') return true;
 
   try {
-    // Android 12+ (API 31+) memerlukan izin BLUETOOTH_CONNECT dan BLUETOOTH_SCAN
     if (Platform.Version >= 31) {
       console.log('[BT] Meminta izin Bluetooth untuk Android 12+...');
       const granted = await PermissionsAndroid.requestMultiple([
         PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT,
         PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN,
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
       ]);
 
       const connectStatus = granted[PermissionsAndroid.PERMISSIONS.BLUETOOTH_CONNECT];
-      const scanStatus = granted[PermissionsAndroid.PERMISSIONS.BLUETOOTH_SCAN];
-      console.log('[BT] BLUETOOTH_CONNECT:', connectStatus, '| BLUETOOTH_SCAN:', scanStatus);
+      console.log('[BT] BLUETOOTH_CONNECT status:', connectStatus);
 
-      const isConnectGranted = connectStatus === PermissionsAndroid.RESULTS.GRANTED;
-      if (!isConnectGranted) {
+      if (connectStatus !== PermissionsAndroid.RESULTS.GRANTED) {
         Alert.alert(
           'Izin Bluetooth Diperlukan',
-          'Izin BLUETOOTH_CONNECT harus diizinkan agar aplikasi dapat terhubung ke printer thermal. Buka Pengaturan > Aplikasi > Koko Motowash > Izin > Bluetooth.',
+          'Izin Bluetooth belum diaktifkan untuk aplikasi ini. Silakan izinkan akses Bluetooth di Pengaturan HP Anda.',
           [
             { text: 'Batal', style: 'cancel' },
             { text: 'Buka Pengaturan', onPress: () => Linking.openSettings() },
@@ -66,17 +64,15 @@ export const requestBluetoothPermissions = async (): Promise<boolean> => {
       }
       return true;
     } else {
-      // Android 11 ke bawah - izin lokasi diperlukan untuk pairing BT (scan)
       console.log('[BT] Android < 12, meminta ACCESS_FINE_LOCATION...');
-      const granted = await PermissionsAndroid.request(
+      await PermissionsAndroid.request(
         PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
       );
-      console.log('[BT] ACCESS_FINE_LOCATION:', granted);
-      return true; // Bluetooth connect tidak memerlukan izin lokasi secara ketat
+      return true;
     }
   } catch (err) {
     console.warn('[BT] Permission request error:', err);
-    return false;
+    return true;
   }
 };
 
