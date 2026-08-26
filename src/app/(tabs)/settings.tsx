@@ -25,7 +25,7 @@ import { eq } from 'drizzle-orm';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
-import { printReceiptThermal, openBluetoothSettings, getNativePairedDevices, BluetoothDeviceInfo } from '../../utils/bluetoothPrinter';
+import { printReceiptThermal, testPrintThermal, openBluetoothSettings, getNativePairedDevices, BluetoothDeviceInfo } from '../../utils/bluetoothPrinter';
 
 export default function SettingsScreen() {
   const settingsStore = useSettingsStore();
@@ -545,6 +545,7 @@ function PrinterSettingsModal({ visible, onClose }: { visible: boolean; onClose:
 
   const [pairedDevices, setPairedDevices] = useState<BluetoothDeviceInfo[]>([]);
   const [scanning, setScanning] = useState(false);
+  const [testingPrint, setTestingPrint] = useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -585,6 +586,35 @@ function PrinterSettingsModal({ visible, onClose }: { visible: boolean; onClose:
     }
   };
 
+  const handleSelectAndSavePrinter = async (device: BluetoothDeviceInfo) => {
+    try {
+      await store.updateSettings({
+        printerName: device.name,
+        printerMacAddress: device.address,
+      });
+      Alert.alert(
+        'Printer Berhasil Disimpan',
+        `Printer ${device.name} (${device.address}) telah tersimpan sebagai printer utama.`
+      );
+    } catch (e) {
+      Alert.alert('Gagal', 'Gagal menyimpan printer terpilih.');
+    }
+  };
+
+  const handleTestPrint = async () => {
+    if (!store.printerMacAddress) {
+      Alert.alert('Printer Belum Dipilih', 'Silakan pilih dan simpan printer terlebih dahulu.');
+      return;
+    }
+
+    setTestingPrint(true);
+    try {
+      await testPrintThermal(store.printerMacAddress);
+    } finally {
+      setTestingPrint(false);
+    }
+  };
+
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
@@ -594,129 +624,195 @@ function PrinterSettingsModal({ visible, onClose }: { visible: boolean; onClose:
               <TouchableOpacity onPress={onClose}>
                 <Ionicons name="arrow-back" size={24} color="#1E293B" />
               </TouchableOpacity>
-              <ThemedText type="default" style={styles.modalSubTitle}>Printer & Struktur Struk</ThemedText>
+              <ThemedText type="default" style={styles.modalSubTitle}>Pengaturan Struk & Printer</ThemedText>
               <View style={{ width: 24 }} />
             </View>
 
             <ScrollView style={styles.modalBody} contentContainerStyle={{ paddingBottom: 220 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
-            <ThemedText style={styles.inputLabel}>Nama Usaha (Header Struk)</ThemedText>
-            <TextInput style={[styles.textInput, { marginBottom: 12 }]} placeholder="Nama Usaha" placeholderTextColor="#94A3B8" value={bizName} onChangeText={setBizName} />
-
-            <ThemedText style={styles.inputLabel}>Alamat Struk</ThemedText>
-            <TextInput style={[styles.textInput, { marginBottom: 12 }]} placeholder="Alamat Usaha" placeholderTextColor="#94A3B8" value={bizAddr} onChangeText={setBizAddr} />
-
-            <ThemedText style={styles.inputLabel}>Nomor Telepon</ThemedText>
-            <TextInput style={[styles.textInput, { marginBottom: 12 }]} placeholder="Nomor Telepon" placeholderTextColor="#94A3B8" value={bizPhone} onChangeText={setBizPhone} keyboardType="phone-pad" />
-
-            <ThemedText style={styles.inputLabel}>Pesan Penutup Struk</ThemedText>
-            <TextInput style={[styles.textInput, { marginBottom: 20 }]} placeholder="Pesan Penutup" placeholderTextColor="#94A3B8" value={thankMsg} onChangeText={setThankMsg} />
-
-            <TouchableOpacity style={[styles.saveBtn, saving && styles.saveBtnDisabled]} onPress={handleSaveSettings}>
-              {saving ? <ActivityIndicator color="#FFF" /> : <ThemedText style={styles.saveBtnText}>Simpan Pengaturan Struk</ThemedText>}
-            </TouchableOpacity>
-
-            {/* Sesi Pengujian & Cetak Ke Printer Bluetooth Thermal */}
-            <ThemedText style={[styles.inputLabel, { marginTop: 30 }]}>Koneksi Printer Bluetooth Thermal (58mm)</ThemedText>
-            <ThemedView type="backgroundElement" style={styles.printerScannerCard}>
-              <Ionicons name="print-outline" size={32} color="#2563EB" />
-              <ThemedText style={styles.scanText}>
-                Fitur Cetak Native Murni: Aplikasi Koko Motowash terhubung langsung ke socket Bluetooth printer Anda tanpa memerlukan aplikasi tambahan.
-              </ThemedText>
-              
-              <TouchableOpacity
-                style={[styles.scanBtn, { backgroundColor: '#8B5CF6', marginBottom: 10 }]}
-                onPress={openBluetoothSettings}
-              >
-                <Ionicons name="bluetooth" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <ThemedText style={styles.scanBtnText}>Buka Bluetooth HP & Pair Printer Baru</ThemedText>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.scanBtn, { backgroundColor: '#0284C7', marginBottom: 10 }]}
-                onPress={fetchPairedDevices}
-                disabled={scanning}
-              >
-                {scanning ? (
-                  <ActivityIndicator color="#FFF" size="small" style={{ marginRight: 6 }} />
-                ) : (
-                  <Ionicons name="refresh" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                )}
-                <ThemedText style={styles.scanBtnText}>
-                  {scanning ? 'Memindai Device HP...' : 'Pindai Device Paired Native'}
-                </ThemedText>
-              </TouchableOpacity>
-
-              {pairedDevices.length > 0 && (
-                <View style={{ width: '100%', marginTop: 8, marginBottom: 12 }}>
-                  <ThemedText style={{ fontSize: 12, fontWeight: '600', color: '#475569', marginBottom: 6 }}>
-                    Device Paired Terdeteksi:
+              {/* STATUS PRINTER TERPESAN / TERPILIH */}
+              <ThemedText style={styles.inputLabel}>Status Printer Terpilih</ThemedText>
+              <View style={{
+                backgroundColor: '#FFFFFF',
+                borderRadius: 12,
+                borderWidth: 1.5,
+                borderColor: store.printerMacAddress ? '#10B981' : '#F59E0B',
+                padding: 14,
+                marginBottom: 20,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+              }}>
+                <View style={{ flex: 1 }}>
+                  <ThemedText style={{ fontSize: 11, fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>
+                    Printer Terpilih:
                   </ThemedText>
-                  {pairedDevices.map((dev, idx) => (
-                    <TouchableOpacity
-                      key={idx}
-                      style={{
-                        padding: 10,
-                        backgroundColor: store.printerMacAddress === dev.address ? '#EFF6FF' : '#F1F5F9',
-                        borderRadius: 8,
-                        borderWidth: 1,
-                        borderColor: store.printerMacAddress === dev.address ? '#2563EB' : '#CBD5E1',
-                        marginBottom: 6,
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                      }}
-                      onPress={() => {
-                        store.updateSettings({
-                          printerName: dev.name,
-                          printerMacAddress: dev.address,
-                        });
-                        Alert.alert('Device Dipilih', `Printer ${dev.name} (${dev.address}) telah disimpan sebagai printer utama.`);
-                      }}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <ThemedText style={{ fontSize: 13, fontWeight: 'bold', color: '#1E293B' }}>{dev.name}</ThemedText>
-                        <ThemedText style={{ fontSize: 11, color: '#64748B' }}>MAC: {dev.address}</ThemedText>
-                      </View>
-                      {store.printerMacAddress === dev.address && (
-                        <Ionicons name="checkmark-circle" size={20} color="#2563EB" />
-                      )}
-                    </TouchableOpacity>
-                  ))}
+                  <ThemedText style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', marginTop: 2 }}>
+                    {store.printerName || 'Belum ada printer yang dipilih'}
+                  </ThemedText>
+                  <ThemedText style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                    MAC: {store.printerMacAddress || '-'}
+                  </ThemedText>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: store.printerMacAddress ? '#10B981' : '#F59E0B' }} />
+                    <ThemedText style={{ fontSize: 12, fontWeight: '700', color: store.printerMacAddress ? '#059669' : '#D97706' }}>
+                      {store.printerMacAddress ? 'Status: Siap Digunakan' : 'Status: Printer Belum Dipilih'}
+                    </ThemedText>
+                  </View>
                 </View>
-              )}
 
-              <TouchableOpacity
-                style={styles.scanBtn}
-                onPress={async () => {
-                  try {
-                    await printReceiptThermal({
-                      businessName: bizName || store.businessName,
-                      businessAddress: bizAddr || store.businessAddress,
-                      businessPhone: bizPhone || store.businessPhone,
-                      thankYouMessage: thankMsg || store.thankYouMessage,
-                      transactionNumber: 'TEST-001',
-                      createdAt: new Date().toISOString(),
-                      plateNumber: 'DD 1234 TEST',
-                      vehicleCategoryName: 'Motor Bebek / Matic',
-                      employeeName: 'Kasir Uji Coba',
-                      paymentMethod: 'Tunai',
-                      originalPrice: 15000,
-                      finalPrice: 15000,
-                    }, store.printerMacAddress);
-                  } catch (e) {
-                    Alert.alert('Gagal Cetak', 'Terjadi kesalahan saat memproses cetakan uji coba.');
-                  }
-                }}
-              >
-                <Ionicons name="print" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <ThemedText style={styles.scanBtnText}>Tes Cetak Struk Native (Direct Socket)</ThemedText>
+                {store.printerMacAddress !== '' && (
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: '#EFF6FF',
+                      paddingHorizontal: 12,
+                      paddingVertical: 8,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: '#BFDBFE',
+                      alignItems: 'center',
+                    }}
+                    onPress={handleTestPrint}
+                    disabled={testingPrint}
+                  >
+                    {testingPrint ? (
+                      <ActivityIndicator size="small" color="#2563EB" />
+                    ) : (
+                      <>
+                        <Ionicons name="print" size={18} color="#2563EB" />
+                        <ThemedText style={{ fontSize: 10, fontWeight: '800', color: '#2563EB', marginTop: 2 }}>
+                          Test Print
+                        </ThemedText>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Sesi Pengujian & Cetak Ke Printer Bluetooth Thermal */}
+              <ThemedText style={styles.inputLabel}>Pilih & Simpan Printer Bluetooth Thermal (58mm)</ThemedText>
+              <ThemedView type="backgroundElement" style={[styles.printerScannerCard, { marginBottom: 24 }]}>
+                <Ionicons name="bluetooth" size={28} color="#2563EB" />
+                <ThemedText style={styles.scanText}>
+                  Koneksi Direct Socket Native: Pilih printer dari daftar perangkat terikat (paired) HP Android Anda, lalu simpan agar otomatis digunakan pada setiap transaksi.
+                </ThemedText>
+
+                <View style={{ flexDirection: 'row', gap: 8, width: '100%', marginTop: 4 }}>
+                  <TouchableOpacity
+                    style={[styles.scanBtn, { flex: 1, backgroundColor: '#8B5CF6', alignItems: 'center' }]}
+                    onPress={openBluetoothSettings}
+                  >
+                    <Ionicons name="bluetooth" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                    <ThemedText style={[styles.scanBtnText, { color: '#FFFFFF', fontSize: 11 }]}>
+                      Pair Printer Baru
+                    </ThemedText>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.scanBtn, { flex: 1, backgroundColor: '#0284C7', alignItems: 'center' }]}
+                    onPress={fetchPairedDevices}
+                    disabled={scanning}
+                  >
+                    {scanning ? (
+                      <ActivityIndicator color="#FFF" size="small" style={{ marginRight: 4 }} />
+                    ) : (
+                      <Ionicons name="refresh" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                    )}
+                    <ThemedText style={[styles.scanBtnText, { color: '#FFFFFF', fontSize: 11 }]}>
+                      {scanning ? 'Memindai...' : 'Segarkan Daftar'}
+                    </ThemedText>
+                  </TouchableOpacity>
+                </View>
+
+                {pairedDevices.length > 0 ? (
+                  <View style={{ width: '100%', marginTop: 12 }}>
+                    <ThemedText style={{ fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 8 }}>
+                      Perangkat Paired Terdeteksi:
+                    </ThemedText>
+                    {pairedDevices.map((dev, idx) => {
+                      const isSelected = store.printerMacAddress === dev.address;
+                      return (
+                        <TouchableOpacity
+                          key={idx}
+                          style={{
+                            padding: 12,
+                            backgroundColor: isSelected ? '#EFF6FF' : '#F8FAFC',
+                            borderRadius: 10,
+                            borderWidth: 1.5,
+                            borderColor: isSelected ? '#2563EB' : '#E2E8F0',
+                            marginBottom: 8,
+                            flexDirection: 'row',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                          }}
+                          onPress={() => handleSelectAndSavePrinter(dev)}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <ThemedText style={{ fontSize: 13, fontWeight: 'bold', color: '#1E293B' }}>{dev.name}</ThemedText>
+                            <ThemedText style={{ fontSize: 11, color: '#64748B' }}>MAC: {dev.address}</ThemedText>
+                          </View>
+
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            {isSelected ? (
+                              <View style={{ backgroundColor: '#2563EB', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Ionicons name="checkmark-circle" size={14} color="#FFFFFF" />
+                                <ThemedText style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '700' }}>Terpilih</ThemedText>
+                              </View>
+                            ) : (
+                              <View style={{ backgroundColor: '#E2E8F0', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 }}>
+                                <ThemedText style={{ color: '#475569', fontSize: 11, fontWeight: '600' }}>Pilih & Simpan</ThemedText>
+                              </View>
+                            )}
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <ThemedText style={{ fontSize: 11, color: '#94A3B8', fontStyle: 'italic', marginTop: 8 }}>
+                    Belum ada printer Bluetooth terikat terdeteksi. Tekan &quot;Pair Printer Baru&quot; di atas.
+                  </ThemedText>
+                )}
+
+                {store.printerMacAddress !== '' && (
+                  <TouchableOpacity
+                    style={[styles.saveBtn, { width: '100%', backgroundColor: '#10B981', marginTop: 8 }]}
+                    onPress={handleTestPrint}
+                    disabled={testingPrint}
+                  >
+                    {testingPrint ? (
+                      <ActivityIndicator color="#FFF" />
+                    ) : (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons name="print-outline" size={18} color="#FFFFFF" />
+                        <ThemedText style={styles.saveBtnText}>Tombol Test Print Printer</ThemedText>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                )}
+              </ThemedView>
+
+              {/* PENGATURAN INFORMASI HEADER & FOOTER STRUK */}
+              <ThemedText style={styles.inputLabel}>Pengaturan Informasi Struk</ThemedText>
+              <ThemedText style={styles.inputLabel}>Nama Usaha (Header Struk)</ThemedText>
+              <TextInput style={[styles.textInput, { marginBottom: 12 }]} placeholder="Nama Usaha" placeholderTextColor="#94A3B8" value={bizName} onChangeText={setBizName} />
+
+              <ThemedText style={styles.inputLabel}>Alamat Struk</ThemedText>
+              <TextInput style={[styles.textInput, { marginBottom: 12 }]} placeholder="Alamat Usaha" placeholderTextColor="#94A3B8" value={bizAddr} onChangeText={setBizAddr} />
+
+              <ThemedText style={styles.inputLabel}>Nomor Telepon</ThemedText>
+              <TextInput style={[styles.textInput, { marginBottom: 12 }]} placeholder="Nomor Telepon" placeholderTextColor="#94A3B8" value={bizPhone} onChangeText={setBizPhone} keyboardType="phone-pad" />
+
+              <ThemedText style={styles.inputLabel}>Pesan Penutup Struk</ThemedText>
+              <TextInput style={[styles.textInput, { marginBottom: 20 }]} placeholder="Pesan Penutup" placeholderTextColor="#94A3B8" value={thankMsg} onChangeText={setThankMsg} />
+
+              <TouchableOpacity style={[styles.saveBtn, saving && styles.saveBtnDisabled]} onPress={handleSaveSettings}>
+                {saving ? <ActivityIndicator color="#FFF" /> : <ThemedText style={styles.saveBtnText}>Simpan Pengaturan Struk</ThemedText>}
               </TouchableOpacity>
-            </ThemedView>
-          </ScrollView>
-            </KeyboardAvoidingView>
-          </ThemedView>
-        </TouchableWithoutFeedback>
-      </Modal>
+            </ScrollView>
+          </KeyboardAvoidingView>
+        </ThemedView>
+      </TouchableWithoutFeedback>
+    </Modal>
   );
 }
 
