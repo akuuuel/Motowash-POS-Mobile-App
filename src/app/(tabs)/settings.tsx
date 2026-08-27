@@ -557,10 +557,10 @@ function PrinterSettingsModal({ visible, onClose }: { visible: boolean; onClose:
     setSaving(true);
     try {
       await store.updateSettings({
-        businessName: bizName,
-        businessAddress: bizAddr,
-        businessPhone: bizPhone,
-        thankYouMessage: thankMsg,
+        business_name: bizName,
+        business_address: bizAddr,
+        business_phone: bizPhone,
+        thank_you_message: thankMsg,
       });
       Alert.alert('Berhasil', 'Pengaturan informasi struk berhasil disimpan!');
     } catch (error) {
