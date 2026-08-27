@@ -71,10 +71,6 @@ export const getNativePairedDevices = async (): Promise<BluetoothDeviceInfo[]> =
   if (Platform.OS !== 'android') return [];
 
   if (!BluetoothPrinterModule || !BluetoothPrinterModule.getPairedDevices) {
-    Alert.alert(
-      'Koneksi Printer Tidak Tersedia',
-      'Modul printer native tidak dapat diakses pada perangkat ini.'
-    );
     return [];
   }
 
@@ -86,10 +82,6 @@ export const getNativePairedDevices = async (): Promise<BluetoothDeviceInfo[]> =
     return devices || [];
   } catch (e: any) {
     console.error('[BT] getPairedDevices error:', e);
-    Alert.alert(
-      'Gagal Memuat Daftar Printer',
-      e?.message || 'Pastikan Bluetooth dalam keadaan menyala dan printer sudah dipasangkan di Pengaturan Bluetooth HP.'
-    );
   }
   return [];
 };
@@ -221,44 +213,39 @@ export const shareSlipGajiToBluetoothPrinter = async (data: SlipGajiData) => {
 };
 
 /**
- * Mencetak Struk Transaksi Secara Murni Direct Native via Bluetooth
+ * Mencetak Struk Transaksi secara Otomatis (Direct Native / System Print Fallback)
  */
 export const printReceiptThermal = async (data: ReceiptData, overrideMacAddress?: string) => {
-  const rawEscPosString = buildReceiptBytes(data);
-  const bytes = stringToBytes(rawEscPosString);
-  const base64Data = bytesToBase64(bytes);
-
   const storeSettings = useSettingsStore.getState();
   let targetMac = overrideMacAddress || storeSettings.printerMacAddress;
 
   if (!targetMac && Platform.OS === 'android') {
-    const paired = await getNativePairedDevices();
-    if (paired && paired.length > 0) {
-      const thermalDevice =
-        paired.find((d) => /print|pos|58|thermal|goojpr|mpt|rpp|vsc|panda/i.test(d.name)) || paired[0];
-      targetMac = thermalDevice.address;
+    try {
+      const paired = await getNativePairedDevices();
+      if (paired && paired.length > 0) {
+        const thermalDevice =
+          paired.find((d) => /print|pos|58|thermal|goojpr|mpt|rpp|vsc|panda/i.test(d.name)) || paired[0];
+        targetMac = thermalDevice.address;
+      }
+    } catch (e) {
+      // Ignore paired device fetch errors silently
     }
   }
 
-  if (!targetMac) {
-    Alert.alert(
-      'Printer Belum Dipilih',
-      'Silakan pilih printer terlebih dahulu di menu Pengaturan Printer.'
-    );
-    return;
-  }
-
-  if (Platform.OS === 'android' && BluetoothPrinterModule?.printRawBytes) {
+  // Jika ada MAC Address printer yang valid, coba cetak direct via Bluetooth
+  if (targetMac && Platform.OS === 'android' && BluetoothPrinterModule?.printRawBytes) {
     try {
+      const rawEscPosString = buildReceiptBytes(data);
+      const bytes = stringToBytes(rawEscPosString);
+      const base64Data = bytesToBase64(bytes);
       await sendToNativePrinter(targetMac, base64Data);
       return;
     } catch (nativeErr: any) {
-      Alert.alert('Gagal Cetak Struk', nativeErr.message || 'Printer thermal tidak merespon.');
-      return;
+      console.log('[BT] Direct print error, falling back to system print:', nativeErr);
     }
   }
 
-  // Fallback Cetak Dokumen Sistem
+  // Fallback Otomatis Tanpa Alert: Cetak via Dokumen Sistem / PDF Preview HP
   try {
     const html = buildReceiptHtml(data);
     await Print.printAsync({
@@ -271,40 +258,34 @@ export const printReceiptThermal = async (data: ReceiptData, overrideMacAddress?
 };
 
 /**
- * Mencetak Slip Gaji Karyawan Secara Murni Direct Native via Bluetooth
+ * Mencetak Slip Gaji Karyawan secara Otomatis (Direct Native / System Print Fallback)
  */
 export const printSlipGajiThermal = async (data: SlipGajiData, overrideMacAddress?: string) => {
-  const rawEscPosString = buildSlipGajiBytes(data);
-  const bytes = stringToBytes(rawEscPosString);
-  const base64Data = bytesToBase64(bytes);
-
   const storeSettings = useSettingsStore.getState();
   let targetMac = overrideMacAddress || storeSettings.printerMacAddress;
 
   if (!targetMac && Platform.OS === 'android') {
-    const paired = await getNativePairedDevices();
-    if (paired && paired.length > 0) {
-      const thermalDevice =
-        paired.find((d) => /print|pos|58|thermal|goojpr|mpt|rpp|vsc|panda/i.test(d.name)) || paired[0];
-      targetMac = thermalDevice.address;
+    try {
+      const paired = await getNativePairedDevices();
+      if (paired && paired.length > 0) {
+        const thermalDevice =
+          paired.find((d) => /print|pos|58|thermal|goojpr|mpt|rpp|vsc|panda/i.test(d.name)) || paired[0];
+        targetMac = thermalDevice.address;
+      }
+    } catch (e) {
+      // Ignore paired device fetch errors silently
     }
   }
 
-  if (!targetMac) {
-    Alert.alert(
-      'Printer Belum Dipilih',
-      'Silakan pilih printer terlebih dahulu di menu Pengaturan Printer.'
-    );
-    return;
-  }
-
-  if (Platform.OS === 'android' && BluetoothPrinterModule?.printRawBytes) {
+  if (targetMac && Platform.OS === 'android' && BluetoothPrinterModule?.printRawBytes) {
     try {
+      const rawEscPosString = buildSlipGajiBytes(data);
+      const bytes = stringToBytes(rawEscPosString);
+      const base64Data = bytesToBase64(bytes);
       await sendToNativePrinter(targetMac, base64Data);
       return;
     } catch (nativeErr: any) {
-      Alert.alert('Gagal Cetak Slip Gaji', nativeErr.message || 'Printer thermal tidak merespon.');
-      return;
+      console.log('[BT] Direct slip print error, falling back to system print:', nativeErr);
     }
   }
 
