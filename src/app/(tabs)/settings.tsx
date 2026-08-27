@@ -27,8 +27,11 @@ import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import { printReceiptThermal } from '../../utils/bluetoothPrinter';
 
+import { useSweetAlert } from '@/components/SweetAlert';
+
 export default function SettingsScreen() {
   const settingsStore = useSettingsStore();
+  const sweetAlert = useSweetAlert();
 
   // Modal screen controllers
   const [activeModal, setActiveModal] = useState<'karyawan' | 'motor' | 'printer' | 'backup' | null>(null);
@@ -38,9 +41,9 @@ export default function SettingsScreen() {
   const handleSelectPeriod = async (p: 'harian' | 'mingguan' | 'bulanan') => {
     try {
       await settingsStore.updateSetting('payroll_period', p);
-      Alert.alert('Sukses', `Periode penggajian operasional diubah menjadi ${p === 'harian' ? 'Harian' : p === 'mingguan' ? 'Mingguan' : 'Bulanan'}.`);
+      sweetAlert.success('Sukses', `Periode penggajian operasional diubah menjadi ${p === 'harian' ? 'Harian' : p === 'mingguan' ? 'Mingguan' : 'Bulanan'}.`);
     } catch (e) {
-      Alert.alert('Gagal', 'Gagal menyimpan periode penggajian.');
+      sweetAlert.error('Gagal', 'Gagal menyimpan periode penggajian.');
     }
   };
 
@@ -167,6 +170,7 @@ export default function SettingsScreen() {
       <MotorManagementModal visible={activeModal === 'motor'} onClose={() => setActiveModal(null)} />
       <PrinterSettingsModal visible={activeModal === 'printer'} onClose={() => setActiveModal(null)} />
       <BackupRestoreModal visible={activeModal === 'backup'} onClose={() => setActiveModal(null)} />
+      <sweetAlert.AlertComponent />
     </View>
   );
 }
@@ -177,6 +181,7 @@ export default function SettingsScreen() {
 function EmployeeManagementModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const employeesList = useMasterStore((state) => state.employees);
   const fetchEmployees = useMasterStore((state) => state.fetchEmployees);
+  const sweetAlert = useSweetAlert();
   
   const [name, setName] = useState('');
   const [adding, setAdding] = useState(false);
@@ -197,9 +202,9 @@ function EmployeeManagementModal({ visible, onClose }: { visible: boolean; onClo
       });
       setName('');
       await fetchEmployees();
-      Alert.alert('Sukses', 'Karyawan baru berhasil ditambahkan.');
+      sweetAlert.success('Sukses', 'Karyawan baru berhasil ditambahkan.');
     } catch (e) {
-      Alert.alert('Gagal', 'Gagal menyimpan karyawan baru.');
+      sweetAlert.error('Gagal', 'Gagal menyimpan karyawan baru.');
     } finally {
       setAdding(false);
     }
@@ -213,9 +218,9 @@ function EmployeeManagementModal({ visible, onClose }: { visible: boolean; onClo
       }).where(eq(employees.id, id));
       setEditingEmpId(null);
       await fetchEmployees();
-      Alert.alert('Sukses', 'Nama karyawan berhasil diperbarui.');
+      sweetAlert.success('Sukses', 'Nama karyawan berhasil diperbarui.');
     } catch (e) {
-      Alert.alert('Gagal', 'Gagal memperbarui nama karyawan.');
+      sweetAlert.error('Gagal', 'Gagal memperbarui nama karyawan.');
     }
   };
 
@@ -225,7 +230,7 @@ function EmployeeManagementModal({ visible, onClose }: { visible: boolean; onClo
       await db.update(employees).set({ status: nextStatus }).where(eq(employees.id, id));
       await fetchEmployees();
     } catch (e) {
-      Alert.alert('Gagal', 'Gagal memperbarui status karyawan.');
+      sweetAlert.error('Gagal', 'Gagal memperbarui status karyawan.');
     }
   };
 
@@ -325,6 +330,7 @@ function EmployeeManagementModal({ visible, onClose }: { visible: boolean; onClo
             </KeyboardAvoidingView>
           </ThemedView>
         </TouchableWithoutFeedback>
+        <sweetAlert.AlertComponent />
       </Modal>
   );
 }
@@ -335,6 +341,7 @@ function EmployeeManagementModal({ visible, onClose }: { visible: boolean; onClo
 function MotorManagementModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const categoriesList = useMasterStore((state) => state.categories);
   const fetchCategories = useMasterStore((state) => state.fetchCategories);
+  const sweetAlert = useSweetAlert();
   
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
@@ -360,9 +367,9 @@ function MotorManagementModal({ visible, onClose }: { visible: boolean; onClose:
       setPrice('');
       setCommission('8000');
       await fetchCategories();
-      Alert.alert('Sukses', 'Jenis motor, tarif, dan komisi baru disimpan.');
+      sweetAlert.success('Sukses', 'Jenis motor, tarif, dan komisi baru disimpan.');
     } catch (e) {
-      Alert.alert('Gagal', 'Gagal menyimpan jenis motor.');
+      sweetAlert.error('Gagal', 'Gagal menyimpan jenis motor.');
     } finally {
       setSaving(false);
     }
@@ -376,9 +383,9 @@ function MotorManagementModal({ visible, onClose }: { visible: boolean; onClose:
       }).where(eq(vehicleCategories.id, id));
       setEditingId(null);
       await fetchCategories();
-      Alert.alert('Sukses', 'Tarif dan komisi berhasil diperbarui.');
+      sweetAlert.success('Sukses', 'Tarif dan komisi berhasil diperbarui.');
     } catch (e) {
-      Alert.alert('Gagal', 'Gagal memperbarui kategori motor.');
+      sweetAlert.error('Gagal', 'Gagal memperbarui kategori motor.');
     }
   };
 
@@ -388,7 +395,7 @@ function MotorManagementModal({ visible, onClose }: { visible: boolean; onClose:
       await db.update(vehicleCategories).set({ status: nextStatus }).where(eq(vehicleCategories.id, id));
       await fetchCategories();
     } catch (e) {
-      Alert.alert('Gagal', 'Gagal memperbarui status motor.');
+      sweetAlert.error('Gagal', 'Gagal memperbarui status motor.');
     }
   };
 
@@ -529,6 +536,7 @@ function MotorManagementModal({ visible, onClose }: { visible: boolean; onClose:
             </KeyboardAvoidingView>
           </ThemedView>
         </TouchableWithoutFeedback>
+        <sweetAlert.AlertComponent />
       </Modal>
   );
 }
@@ -538,6 +546,7 @@ function MotorManagementModal({ visible, onClose }: { visible: boolean; onClose:
 // ==========================================
 function PrinterSettingsModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const store = useSettingsStore();
+  const sweetAlert = useSweetAlert();
   const [bizName, setBizName] = useState(store.businessName);
   const [bizAddr, setBizAddr] = useState(store.businessAddress);
   const [bizPhone, setBizPhone] = useState(store.businessPhone);
@@ -562,9 +571,9 @@ function PrinterSettingsModal({ visible, onClose }: { visible: boolean; onClose:
         business_phone: bizPhone,
         thank_you_message: thankMsg,
       });
-      Alert.alert('Berhasil', 'Pengaturan informasi struk berhasil disimpan!');
+      sweetAlert.success('Berhasil', 'Pengaturan informasi struk berhasil disimpan!');
     } catch (error) {
-      Alert.alert('Gagal', 'Gagal memperbarui pengaturan.');
+      sweetAlert.error('Gagal', 'Gagal memperbarui pengaturan.');
     } finally {
       setSaving(false);
     }
@@ -604,6 +613,7 @@ function PrinterSettingsModal({ visible, onClose }: { visible: boolean; onClose:
           </KeyboardAvoidingView>
         </ThemedView>
       </TouchableWithoutFeedback>
+      <sweetAlert.AlertComponent />
     </Modal>
   );
 }
@@ -614,6 +624,7 @@ function PrinterSettingsModal({ visible, onClose }: { visible: boolean; onClose:
 function BackupRestoreModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const [processing, setProcessing] = useState(false);
   const settingsStore = useSettingsStore();
+  const sweetAlert = useSweetAlert();
 
   const handleExportBackup = async () => {
     setProcessing(true);
@@ -658,7 +669,7 @@ function BackupRestoreModal({ visible, onClose }: { visible: boolean; onClose: (
         throw new Error('Sharing tidak didukung.');
       }
     } catch (e: any) {
-      Alert.alert('Gagal Backup', e.message || 'Pembentukan file backup gagal.');
+      sweetAlert.error('Gagal Backup', e.message || 'Pembentukan file backup gagal.');
     } finally {
       setProcessing(false);
     }
@@ -685,20 +696,15 @@ function BackupRestoreModal({ visible, onClose }: { visible: boolean; onClose: (
       }
 
       // Konfirmasi bahaya menimpa data
-      Alert.alert(
+      sweetAlert.confirm(
         'PERINGATAN RESTORE',
         'Proses restore akan menghapus seluruh data transaksi lokal saat ini dan menggantikannya dengan data backup. Apakah Anda yakin ingin melanjutkannya?',
-        [
-          { text: 'Batal', style: 'cancel' },
-          { 
-            text: 'Iya, Lanjutkan Restore', 
-            style: 'destructive',
-            onPress: () => executeRestore(backupObj.data)
-          }
-        ]
+        () => executeRestore(backupObj.data),
+        'Iya, Restore',
+        'Batal'
       );
     } catch (e: any) {
-      Alert.alert('Gagal Restore', e.message || 'Pemasukan file restore gagal.');
+      sweetAlert.error('Gagal Restore', e.message || 'Pemasukan file restore gagal.');
     }
   };
 
@@ -737,10 +743,10 @@ function BackupRestoreModal({ visible, onClose }: { visible: boolean; onClose: (
         settingsStore.loadSettings(),
       ]);
 
-      Alert.alert('Sukses', 'Data pemulihan (restore) berhasil diterapkan.');
+      sweetAlert.success('Sukses', 'Data pemulihan (restore) berhasil diterapkan.');
     } catch (error) {
       console.error('Core restore error:', error);
-      Alert.alert('Gagal', 'Restore database gagal tengah jalan.');
+      sweetAlert.error('Gagal', 'Restore database gagal tengah jalan.');
     } finally {
       setProcessing(false);
     }
@@ -785,6 +791,7 @@ function BackupRestoreModal({ visible, onClose }: { visible: boolean; onClose: (
           )}
         </View>
       </ThemedView>
+      <sweetAlert.AlertComponent />
     </Modal>
   );
 }

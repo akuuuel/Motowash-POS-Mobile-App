@@ -24,6 +24,7 @@ import { db } from '../../db/client';
 import { transactions, transactionCancellations } from '../../db/schema';
 import { eq, desc, like, and } from 'drizzle-orm';
 import { printReceiptThermal } from '../../utils/bluetoothPrinter';
+import { useSweetAlert } from '@/components/SweetAlert';
 
 export default function TransactionsScreen() {
   const [activeTab, setActiveTab] = useState<'baru' | 'riwayat'>('baru');
@@ -75,6 +76,7 @@ function NewTransactionView() {
   const employees = useMasterStore((state) => state.employees);
   const { form, setPlateNumber, selectCategory, selectEmployee, setFinalPrice, setPaymentMethod, setNotes, saveTransaction } = useTransactionStore();
   const settings = useSettingsStore();
+  const sweetAlert = useSweetAlert();
 
   const [saving, setSaving] = useState(false);
   const [priceAdjusted, setPriceAdjusted] = useState(false);
@@ -104,15 +106,15 @@ function NewTransactionView() {
 
   const handleSave = async () => {
     if (!form.plateNumber.trim()) {
-      Alert.alert('Perhatian', 'Nomor plat motor wajib diisi.');
+      sweetAlert.warning('Perhatian', 'Nomor plat motor wajib diisi.');
       return;
     }
     if (!form.vehicleCategoryId) {
-      Alert.alert('Perhatian', 'Silakan pilih jenis motor terlebih dahulu.');
+      sweetAlert.warning('Perhatian', 'Silakan pilih jenis motor terlebih dahulu.');
       return;
     }
     if (!form.employeeId) {
-      Alert.alert('Perhatian', 'Silakan pilih karyawan pencuci.');
+      sweetAlert.warning('Perhatian', 'Silakan pilih karyawan pencuci.');
       return;
     }
 
@@ -123,7 +125,7 @@ function NewTransactionView() {
       setReceiptModalVisible(true);
       setPriceAdjusted(false);
     } catch (error: any) {
-      Alert.alert('Simpan Gagal', error.message || 'Terjadi kesalahan sistem.');
+      sweetAlert.error('Simpan Gagal', error.message || 'Terjadi kesalahan sistem.');
     } finally {
       setSaving(false);
     }
@@ -148,7 +150,7 @@ function NewTransactionView() {
       });
       setReceiptModalVisible(false);
     } catch (e) {
-      Alert.alert('Gagal Cetak', 'Terjadi kesalahan saat memproses cetakan.');
+      sweetAlert.error('Gagal Cetak', 'Terjadi kesalahan saat memproses cetakan.');
     }
   };
 
@@ -331,6 +333,7 @@ function NewTransactionView() {
           </ThemedView>
         </View>
       </Modal>
+      <sweetAlert.AlertComponent />
     </View>
   );
 }
@@ -342,6 +345,7 @@ function TransactionHistoryView() {
   const [searchText, setSearchText] = useState('');
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const sweetAlert = useSweetAlert();
   
   // States Detail Modal
   const [selectedTx, setSelectedTx] = useState<any>(null);
@@ -382,7 +386,7 @@ function TransactionHistoryView() {
 
   const handleCancelTransaction = async () => {
     if (!cancelReason.trim()) {
-      Alert.alert('Perhatian', 'Alasan pembatalan wajib diisi.');
+      sweetAlert.warning('Perhatian', 'Alasan pembatalan wajib diisi.');
       return;
     }
 
@@ -402,13 +406,13 @@ function TransactionHistoryView() {
           });
       });
 
-      Alert.alert('Sukses', 'Transaksi berhasil dibatalkan.');
+      sweetAlert.success('Sukses', 'Transaksi berhasil dibatalkan.');
       setCancelVisible(false);
       setDetailVisible(false);
       setCancelReason('');
       loadHistory(); // Reload
     } catch (error: any) {
-      Alert.alert('Gagal', error.message || 'Gagal membatalkan transaksi.');
+      sweetAlert.error('Gagal', error.message || 'Gagal membatalkan transaksi.');
     } finally {
       setCancelling(false);
     }
@@ -432,7 +436,7 @@ function TransactionHistoryView() {
         finalPrice: selectedTx.finalPrice,
       });
     } catch (e) {
-      Alert.alert('Gagal Cetak', 'Terjadi kesalahan saat memproses cetakan.');
+      sweetAlert.error('Gagal Cetak', 'Terjadi kesalahan saat memproses cetakan.');
     }
   };
 
@@ -665,6 +669,7 @@ function TransactionHistoryView() {
           </ThemedView>
         </View>
       </Modal>
+      <sweetAlert.AlertComponent />
     </View>
   );
 }

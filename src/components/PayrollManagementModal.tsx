@@ -21,6 +21,7 @@ import { db } from '../db/client';
 import { transactions, payrollPayouts, employees } from '../db/schema';
 import { eq, and, gte, lte, sql, desc, or } from 'drizzle-orm';
 import { printSlipGajiThermal } from '../utils/bluetoothPrinter';
+import { useSweetAlert } from '@/components/SweetAlert';
 
 interface PayrollManagementModalProps {
   visible: boolean;
@@ -37,6 +38,7 @@ interface CategoryBreakdownItem {
 export function PayrollManagementModal({ visible, onClose }: PayrollManagementModalProps) {
   const employeesList = useMasterStore((state) => state.employees);
   const settingsStore = useSettingsStore();
+  const sweetAlert = useSweetAlert();
 
   const [activeTab, setActiveTab] = useState<'hitung' | 'riwayat'>('hitung');
 
@@ -270,12 +272,12 @@ export function PayrollManagementModal({ visible, onClose }: PayrollManagementMo
         createdAt: new Date().toISOString(),
       });
 
-      Alert.alert('Sukses', `Gaji ${selectedEmployee.name} berhasil ditandai TERBAYARKAN.`);
+      sweetAlert.success('Sukses', `Gaji ${selectedEmployee.name} berhasil ditandai TERBAYARKAN.`);
       await calculatePayroll();
       await loadHistory();
     } catch (e: any) {
       console.error('Gagal menyimpan pembayaran gaji:', e);
-      Alert.alert('Gagal', e?.message?.includes('UNIQUE') ? 'Slip gaji untuk periode ini sudah ada.' : 'Gagal menyimpan status pembayaran gaji.');
+      sweetAlert.error('Gagal', e?.message?.includes('UNIQUE') ? 'Slip gaji untuk periode ini sudah ada.' : 'Gagal menyimpan status pembayaran gaji.');
     }
   };
 
@@ -657,7 +659,7 @@ export function PayrollManagementModal({ visible, onClose }: PayrollManagementMo
                         await printSlipGajiThermal(slipDataToPrint);
                         setPrintModalVisible(false);
                       } catch (e) {
-                        Alert.alert('Gagal Cetak', 'Terjadi kesalahan saat memproses cetakan.');
+                        sweetAlert.error('Gagal Cetak', 'Terjadi kesalahan saat memproses cetakan.');
                       }
                     }
                   }}
@@ -670,6 +672,7 @@ export function PayrollManagementModal({ visible, onClose }: PayrollManagementMo
           </Modal>
         </KeyboardAvoidingView>
       </ThemedView>
+      <sweetAlert.AlertComponent />
     </Modal>
   );
 }

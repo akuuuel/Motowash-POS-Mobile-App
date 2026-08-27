@@ -11,6 +11,7 @@ import { exportToExcel } from '../../utils/excelExporter';
 import { exportToPDF } from '../../utils/pdfExporter';
 import { useSettingsStore } from '../../store/useSettingsStore';
 import { PayrollManagementModal } from '../../components/PayrollManagementModal';
+import { useSweetAlert } from '@/components/SweetAlert';
 
 type PeriodType = 'today' | 'month' | 'all';
 
@@ -20,6 +21,7 @@ export default function ReportsScreen() {
   const [exporting, setExporting] = useState(false);
   const [payrollModalVisible, setPayrollModalVisible] = useState(false);
   const settings = useSettingsStore();
+  const sweetAlert = useSweetAlert();
 
   const [reportData, setReportData] = useState({
     totalEarnings: 0,
@@ -111,7 +113,7 @@ export default function ReportsScreen() {
 
   const handleExportExcel = async () => {
     if (reportData.rawList.length === 0 && reportData.payoutList.length === 0) {
-      Alert.alert('Perhatian', 'Tidak ada data transaksi atau penggajian untuk diekspor.');
+      sweetAlert.warning('Perhatian', 'Tidak ada data transaksi atau penggajian untuk diekspor.');
       return;
     }
     setExporting(true);
@@ -121,9 +123,9 @@ export default function ReportsScreen() {
         address: settings.businessAddress,
         phone: settings.businessPhone,
       });
-      Alert.alert('Sukses', 'Laporan Excel berhasil dibagikan.');
+      sweetAlert.success('Sukses', 'Laporan Excel berhasil dibagikan.');
     } catch (e: any) {
-      Alert.alert('Ekspor Gagal', e.message || 'Ekspor excel gagal.');
+      sweetAlert.error('Ekspor Gagal', e.message || 'Ekspor excel gagal.');
     } finally {
       setExporting(false);
     }
@@ -131,7 +133,7 @@ export default function ReportsScreen() {
 
   const handleExportPDF = async () => {
     if (reportData.rawList.length === 0 && reportData.payoutList.length === 0) {
-      Alert.alert('Perhatian', 'Tidak ada data transaksi atau penggajian untuk diekspor.');
+      sweetAlert.warning('Perhatian', 'Tidak ada data transaksi atau penggajian untuk diekspor.');
       return;
     }
     setExporting(true);
@@ -141,9 +143,9 @@ export default function ReportsScreen() {
         address: settings.businessAddress,
         phone: settings.businessPhone,
       });
-      Alert.alert('Sukses', 'Laporan PDF berhasil dibagikan.');
+      sweetAlert.success('Sukses', 'Laporan PDF berhasil dibagikan.');
     } catch (e: any) {
-      Alert.alert('Ekspor Gagal', e.message || 'Ekspor PDF gagal.');
+      sweetAlert.error('Ekspor Gagal', e.message || 'Ekspor PDF gagal.');
     } finally {
       setExporting(false);
     }
@@ -377,6 +379,7 @@ export default function ReportsScreen() {
           loadReportData();
         }}
       />
+      <sweetAlert.AlertComponent />
     </ScrollView>
   );
 }

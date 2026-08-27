@@ -138,15 +138,26 @@ const sendToNativePrinter = async (macAddress: string, base64Data: string): Prom
 /**
  * Tes Cetak Struk (Test Print)
  */
-export const testPrintThermal = async (targetMacAddress?: string): Promise<boolean> => {
+export const testPrintThermal = async (
+  targetMacAddress?: string,
+  alertHandler?: {
+    success?: (title: string, message: string) => void;
+    error?: (title: string, message: string) => void;
+    warning?: (title: string, message: string) => void;
+  }
+): Promise<boolean> => {
   const storeSettings = useSettingsStore.getState();
   const mac = targetMacAddress || storeSettings.printerMacAddress;
 
   if (!mac) {
-    Alert.alert(
-      'Printer Belum Dipilih',
-      'Silakan pilih printer terlebih dahulu di menu Pengaturan Printer.'
-    );
+    if (alertHandler?.warning) {
+      alertHandler.warning('Printer Belum Dipilih', 'Silakan pilih printer terlebih dahulu di menu Pengaturan Printer.');
+    } else {
+      Alert.alert(
+        'Printer Belum Dipilih',
+        'Silakan pilih printer terlebih dahulu di menu Pengaturan Printer.'
+      );
+    }
     return false;
   }
 
@@ -156,10 +167,18 @@ export const testPrintThermal = async (targetMacAddress?: string): Promise<boole
     const base64Data = bytesToBase64(bytes);
 
     await sendToNativePrinter(mac, base64Data);
-    Alert.alert('Tes Cetak Berhasil', 'Printer thermal berhasil terhubung dan mencetak struk percobaan!');
+    if (alertHandler?.success) {
+      alertHandler.success('Tes Cetak Berhasil', 'Printer thermal berhasil terhubung dan mencetak struk percobaan!');
+    } else {
+      Alert.alert('Tes Cetak Berhasil', 'Printer thermal berhasil terhubung dan mencetak struk percobaan!');
+    }
     return true;
   } catch (e: any) {
-    Alert.alert('Gagal Cetak', e.message || 'Printer tidak merespon koneksi.');
+    if (alertHandler?.error) {
+      alertHandler.error('Gagal Cetak', e.message || 'Printer tidak merespon koneksi.');
+    } else {
+      Alert.alert('Gagal Cetak', e.message || 'Printer tidak merespon koneksi.');
+    }
     return false;
   }
 };
