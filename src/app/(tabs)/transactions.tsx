@@ -958,7 +958,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 140,
   },
   txCard: {
     backgroundColor: '#FFFFFF',

@@ -143,7 +143,7 @@ export default function DashboardScreen() {
   const filteredPaymentList = getFilteredTodayTransactions();
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="always" keyboardDismissMode="none">
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={true} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" nestedScrollEnabled={true}>
       {/* 1. Header Sambutan Clean */}
       <View style={styles.heroBanner}>
         <View style={styles.heroTopRow}>
@@ -391,7 +391,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 140,
   },
   center: {
     flex: 1,

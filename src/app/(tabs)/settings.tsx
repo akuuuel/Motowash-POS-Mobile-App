@@ -48,10 +48,11 @@ export default function SettingsScreen() {
     <View style={{ flex: 1 }}>
       <ScrollView
         style={styles.container}
-        contentContainerStyle={[styles.content, { paddingBottom: 60 }]}
+        contentContainerStyle={[styles.content, { paddingBottom: 140 }]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={true}
+        nestedScrollEnabled={true}
       >
         <ThemedText style={styles.sectionHeader}>Pengelolaan Usaha</ThemedText>
         

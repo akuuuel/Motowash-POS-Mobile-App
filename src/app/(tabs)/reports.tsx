@@ -27,7 +27,9 @@ export default function ReportsScreen() {
     cancelledWashes: 0,
     totalPaidPayroll: 0,
     totalPayoutCount: 0,
+    netProfit: 0,
     rawList: [] as any[],
+    payoutList: [] as any[],
   });
 
   const loadReportData = useCallback(async () => {
@@ -66,8 +68,7 @@ export default function ReportsScreen() {
         }
       });
 
-      // PERBAIKAN: Query rekap penggajian karyawan juga harus ikut filter periode
-      // Sebelumnya selalu menampilkan total SEMUA waktu meski filter "Hari Ini" aktif
+      // Filter rekap penggajian karyawan sesuai periode
       let payoutDateConstraint = sql`1=1`;
       if (period === 'today') {
         payoutDateConstraint = sql`(
@@ -81,11 +82,13 @@ export default function ReportsScreen() {
         )`;
       }
 
-      const payouts = await db.select().from(payrollPayouts).where(payoutDateConstraint);
+      const payouts = await db.select().from(payrollPayouts).where(payoutDateConstraint).orderBy(desc(payrollPayouts.id));
       let totalPayoutSum = 0;
       payouts.forEach((p) => {
         totalPayoutSum += p.netSalary;
       });
+
+      const netIncome = activeEarnings - totalPayoutSum;
 
       setReportData({
         totalEarnings: activeEarnings,
@@ -93,7 +96,9 @@ export default function ReportsScreen() {
         cancelledWashes: cancelledWashesCount,
         totalPaidPayroll: totalPayoutSum,
         totalPayoutCount: payouts.length,
+        netProfit: netIncome,
         rawList: txs,
+        payoutList: payouts,
       });
     } catch (e) {
       console.error('Gagal mengambil data laporan:', e);
@@ -115,14 +120,18 @@ export default function ReportsScreen() {
   };
 
   const handleExportExcel = async () => {
-    if (reportData.rawList.length === 0) {
-      Alert.alert('Perhatian', 'Tidak ada data transaksi untuk diekspor.');
+    if (reportData.rawList.length === 0 && reportData.payoutList.length === 0) {
+      Alert.alert('Perhatian', 'Tidak ada data transaksi atau penggajian untuk diekspor.');
       return;
     }
     setExporting(true);
     try {
-      await exportToExcel(reportData.rawList, getPeriodLabel());
-      Alert.alert('Sukses', 'Laporan Excel berhasil dibagikan.');
+      await exportToExcel(reportData.rawList, reportData.payoutList, getPeriodLabel(), {
+        name: settings.businessName,
+        address: settings.businessAddress,
+        phone: settings.businessPhone,
+      });
+      Alert.alert('Sukses', 'Laporan Excel lengkap berhasil dibagikan.');
     } catch (e: any) {
       Alert.alert('Ekspor Gagal', e.message || 'Ekspor excel gagal.');
     } finally {
@@ -131,18 +140,18 @@ export default function ReportsScreen() {
   };
 
   const handleExportPDF = async () => {
-    if (reportData.rawList.length === 0) {
-      Alert.alert('Perhatian', 'Tidak ada data transaksi untuk diekspor.');
+    if (reportData.rawList.length === 0 && reportData.payoutList.length === 0) {
+      Alert.alert('Perhatian', 'Tidak ada data transaksi atau penggajian untuk diekspor.');
       return;
     }
     setExporting(true);
     try {
-      await exportToPDF(reportData.rawList, getPeriodLabel(), {
+      await exportToPDF(reportData.rawList, reportData.payoutList, getPeriodLabel(), {
         name: settings.businessName,
         address: settings.businessAddress,
         phone: settings.businessPhone,
       });
-      Alert.alert('Sukses', 'Laporan PDF berhasil dibagikan.');
+      Alert.alert('Sukses', 'Laporan PDF lengkap berhasil dibagikan.');
     } catch (e: any) {
       Alert.alert('Ekspor Gagal', e.message || 'Ekspor PDF gagal.');
     } finally {
@@ -169,10 +178,11 @@ export default function ReportsScreen() {
   return (
     <ScrollView
       style={styles.container}
-      contentContainerStyle={[styles.content, { paddingBottom: 60 }]}
+      contentContainerStyle={[styles.content, { paddingBottom: 140 }]}
       showsVerticalScrollIndicator={true}
       keyboardShouldPersistTaps="handled"
       keyboardDismissMode="on-drag"
+      nestedScrollEnabled={true}
     >
       {/* 1. Header Screen */}
       <View style={styles.headerBlock}>
@@ -210,15 +220,30 @@ export default function ReportsScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* 3. Ringkasan Omzet Finansial */}
+      {/* 3. Ringkasan Omzet & Net Profit */}
       <View style={styles.summaryCard}>
         <View style={styles.summaryCardTop}>
           <View style={styles.summaryBadge}>
             <Ionicons name="stats-chart" size={14} color="#2563EB" />
             <ThemedText style={styles.summaryBadgeText}>PERIODE: {getPeriodLabel().toUpperCase()}</ThemedText>
           </View>
-          <ThemedText style={styles.summaryTitle}>Total Omzet Pendapatan</ThemedText>
+          <ThemedText style={styles.summaryTitle}>Total Omzet Pemasukan (Kotor)</ThemedText>
           <ThemedText style={styles.earningsValue}>{formatRp(reportData.totalEarnings)}</ThemedText>
+        </View>
+
+        {/* Highlight Card Penghasilan Bersih (Net Profit) */}
+        <View style={styles.netProfitBox}>
+          <View style={styles.netProfitCol}>
+            <ThemedText style={styles.netProfitLabel}>Pengeluaran Gaji / Komisi</ThemedText>
+            <ThemedText style={styles.payrollExpenseVal}>-{formatRp(reportData.totalPaidPayroll)}</ThemedText>
+          </View>
+
+          <View style={styles.colDividerNet} />
+
+          <View style={styles.netProfitCol}>
+            <ThemedText style={styles.netProfitLabelBold}>PENGHASILAN BERSIH</ThemedText>
+            <ThemedText style={styles.netProfitVal}>{formatRp(reportData.netProfit)}</ThemedText>
+          </View>
         </View>
 
         <View style={styles.detailCountRow}>
@@ -292,7 +317,7 @@ export default function ReportsScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <ThemedText style={styles.cardTitle}>Ekspor & Cetak Laporan</ThemedText>
-            <ThemedText style={styles.cardSubtitle}>Unduh file laporan transaksi lengkap untuk pembukuan</ThemedText>
+            <ThemedText style={styles.cardSubtitle}>Unduh file laporan transaksi & gaji lengkap (PDF & Excel)</ThemedText>
           </View>
         </View>
 
@@ -303,8 +328,14 @@ export default function ReportsScreen() {
             disabled={exporting}
             activeOpacity={0.8}
           >
-            <Ionicons name="document-text-outline" size={18} color="#FFFFFF" />
-            <ThemedText style={styles.exportBtnText}>Cetak PDF</ThemedText>
+            {exporting ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <>
+                <Ionicons name="document-text-outline" size={18} color="#FFFFFF" />
+                <ThemedText style={styles.exportBtnText}>Cetak PDF Lengkap</ThemedText>
+              </>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -313,8 +344,14 @@ export default function ReportsScreen() {
             disabled={exporting}
             activeOpacity={0.8}
           >
-            <Ionicons name="grid-outline" size={18} color="#FFFFFF" />
-            <ThemedText style={styles.exportBtnText}>Ekspor Excel</ThemedText>
+            {exporting ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <>
+                <Ionicons name="grid-outline" size={18} color="#FFFFFF" />
+                <ThemedText style={styles.exportBtnText}>Ekspor Excel Lengkap</ThemedText>
+              </>
+            )}
           </TouchableOpacity>
         </View>
       </ThemedView>
@@ -389,7 +426,6 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-    paddingBottom: 40,
   },
   headerBlock: {
     marginBottom: 16,
@@ -477,6 +513,44 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#1E3A8A',
     marginTop: 4,
+  },
+  netProfitBox: {
+    flexDirection: 'row',
+    backgroundColor: '#ECFDF5',
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#A7F3D0',
+  },
+  netProfitCol: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  colDividerNet: {
+    width: 1,
+    backgroundColor: '#A7F3D0',
+    marginHorizontal: 12,
+  },
+  netProfitLabel: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  payrollExpenseVal: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#DC2626',
+    marginTop: 2,
+  },
+  netProfitLabelBold: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#047857',
+    textTransform: 'uppercase',
+  },
+  netProfitVal: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#047857',
+    marginTop: 2,
   },
   detailCountRow: {
     flexDirection: 'row',
